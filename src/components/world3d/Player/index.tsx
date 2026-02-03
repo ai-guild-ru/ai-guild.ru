@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 'use client'
 
 import { useRef, useState, useEffect, useMemo } from 'react'
@@ -10,7 +9,7 @@ import {
   useGLTF,
   useAnimations,
 } from '@react-three/drei'
-import { Vector3, Group } from 'three'
+import { Vector3, Group, AnimationClip } from 'three'
 import type { RapierRigidBody } from '@react-three/rapier'
 import { ThirdPersonCamera } from '../ThirdPersonCamera'
 
@@ -25,8 +24,11 @@ const ANIMATION_PATHS = {
 
 type AnimationName = 'idle' | 'walk' | 'run' | 'jump'
 
-const WALK_SPEED = 4
-const RUN_SPEED = 8
+// Модификатор скорости — умножает базовые скорости анимаций и timeScale
+const SPEED_MULTIPLIER = 1
+// Базовые скорости из анализа анимаций (units/sec), умноженные на модификатор
+const WALK_SPEED = 3.5248 * SPEED_MULTIPLIER
+const RUN_SPEED = 11.6508 * SPEED_MULTIPLIER
 const JUMP_FORCE = 5
 
 interface Position {
@@ -35,12 +37,33 @@ interface Position {
   z: number
 }
 
+/**
+ * Удаляет root motion из анимации — убирает position track для Hips bone.
+ * Это нужно, чтобы анимация не двигала модель относительно RigidBody,
+ * а движение контролировалось только физикой.
+ */
+function removeRootMotion(clip: AnimationClip): AnimationClip {
+  const newTracks = clip.tracks.filter((track) => {
+    if (track.name.includes('Hips') && track.name.endsWith('.position')) {
+      return false
+    }
+    return true
+  })
+  clip.tracks = newTracks
+  return clip
+}
+
 useGLTF.preload(MODEL_PATH)
 useGLTF.preload(ANIMATION_PATHS.idle)
 useGLTF.preload(ANIMATION_PATHS.walk)
 useGLTF.preload(ANIMATION_PATHS.run)
 useGLTF.preload(ANIMATION_PATHS.jump)
 
+/**
+ * Компонент игрока с физикой и анимациями.
+ * Использует RigidBody для физического тела и CapsuleCollider для коллизий.
+ * Анимации загружаются из отдельных GLB файлов и применяются к модели.
+ */
 export const Player: React.FC = () => {
   const rigidBodyRef = useRef<RapierRigidBody>(null)
   const avatarRef = useRef<Group>(null)
@@ -68,11 +91,11 @@ export const Player: React.FC = () => {
       }),
       ...walkGltf.animations.map((clip) => {
         clip.name = 'walk'
-        return clip
+        return removeRootMotion(clip)
       }),
       ...runGltf.animations.map((clip) => {
         clip.name = 'run'
-        return clip
+        return removeRootMotion(clip)
       }),
       ...jumpGltf.animations.map((clip) => {
         clip.name = 'jump'
@@ -90,35 +113,32 @@ export const Player: React.FC = () => {
   const sceneRef = useRef<Group>(scene as unknown as Group)
   sceneRef.current = scene as unknown as Group
 
-  const { actions, mixer } = useAnimations(animations, sceneRef)
+  const { actions } = useAnimations(animations, sceneRef)
 
   // Debug: log animation state
-  useEffect(() => {
-    console.log(
-      '[Player] Animations loaded:',
-      animations.length,
-      animations.map((a) => a.name),
-    )
-    console.log('[Player] Actions available:', Object.keys(actions))
-    console.log('[Player] avatarRef.current:', avatarRef.current)
-    console.log('[Player] scene:', scene)
-    console.log('[Player] mixer:', mixer)
-  }, [animations, actions, scene, mixer])
+  // useEffect(() => {
+  //   console.log(
+  //     '[Player] Animations loaded:',
+  //     animations.length,
+  //     animations.map((a) => a.name),
+  //   )
+  //   console.log('[Player] Actions available:', Object.keys(actions))
+  //   console.log('[Player] avatarRef.current:', avatarRef.current)
+  //   console.log('[Player] scene:', scene)
+  //   console.log('[Player] mixer:', mixer)
+  // }, [animations, actions, scene, mixer])
 
   useEffect(() => {
-    console.log(
-      '[Player] Switching to animation:',
-      currentAnimation,
-      'Action exists:',
-      !!actions[currentAnimation],
-    )
     if (actions[currentAnimation]) {
       Object.values(actions).forEach((action) => action?.fadeOut(0.2))
       const action = actions[currentAnimation]
       action?.reset().fadeIn(0.2).play()
-      console.log('[Player] Action started, isRunning:', action?.isRunning())
+      // Ускоряем анимацию пропорционально модификатору скорости
+      if (currentAnimation === 'walk' || currentAnimation === 'run') {
+        action.timeScale = SPEED_MULTIPLIER
+      }
     } else {
-      console.warn('[Player] Animation not found:', currentAnimation)
+      console.error('[Player] Animation not found:', currentAnimation)
     }
   }, [currentAnimation, actions])
 
@@ -182,8 +202,25 @@ export const Player: React.FC = () => {
     }
   })
 
+  // useEffect(() => {
+  //   console.log('Player mounted')
+
+  //   return () => {
+  //     console.error('Player unmounted')
+  //   }
+  // }, [])
+
+  // console.log('Player rendering')
+
+  // console.log(
+  //   'Player position',
+  //   `X: ${debugPosition.x.toFixed(2)} Y: ${debugPosition.y.toFixed(2)} Z:{' '}
+  //         ${debugPosition.z.toFixed(2)}`,
+  // )
+
   return (
     <>
+      {/* Физическое тело игрока — динамический RigidBody с капсульным коллайдером */}
       <RigidBody
         ref={rigidBodyRef}
         colliders={false}
@@ -194,12 +231,22 @@ export const Player: React.FC = () => {
         linearDamping={0.5}
         rotation={[0, 0, 0]}
       >
+        {/* Капсульный коллайдер для физических столкновений */}
         <CapsuleCollider args={[0.5, 0.5]} position={[0, 1, 0]} />
+        {/* Wireframe mesh для визуализации границ коллайдера (отладка) */}
+        <mesh position={[0, 1, 0]}>
+          <capsuleGeometry args={[0.5, 1, 8, 16]} />
+          <meshBasicMaterial color="cyan" wireframe />
+        </mesh>
+        {/* Группа для аватара — вращается при движении */}
         <group ref={avatarRef} position={[0, 0, 0]}>
-          <primitive object={scene} scale={0.6} />
+          {/* 3D модель персонажа */}
+          <primitive object={scene} scale={1} />
         </group>
       </RigidBody>
+      {/* Камера третьего лица, следует за игроком */}
       <ThirdPersonCamera target={rigidBodyRef} />
+      {/* HTML overlay для отображения координат (отладка) */}
       <Html position={[0, 3, 0]} center style={{ pointerEvents: 'none' }}>
         <div
           style={{

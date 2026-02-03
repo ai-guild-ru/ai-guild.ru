@@ -70,6 +70,12 @@ export const ThirdPersonCamera = ({ target }: ThirdPersonCameraProps) => {
       position.z,
     )
 
+    // console.log(
+    //   'Player position',
+    //   `X: ${debugPosition.x.toFixed(2)} Y: ${debugPosition.y.toFixed(2)} Z:{' '}
+    //         ${debugPosition.z.toFixed(2)}`,
+    // )
+
     const offset = new Vector3().setFromSpherical(spherical.current)
     const idealPosition = targetPos.clone().add(offset)
 

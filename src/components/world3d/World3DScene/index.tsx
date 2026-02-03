@@ -1,9 +1,10 @@
+/* eslint-disable no-console */
 'use client'
 
 import { Canvas } from '@react-three/fiber'
 import { Physics } from '@react-three/rapier'
 import { KeyboardControls, Stats } from '@react-three/drei'
-import { Suspense } from 'react'
+import { Suspense, useEffect } from 'react'
 import { Ground } from '../Ground'
 import { Player } from '../Player'
 import { Lighting } from '../Lighting'
@@ -20,6 +21,16 @@ const keyboardMap = [
 ]
 
 export const World3DScene: React.FC = () => {
+  useEffect(() => {
+    console.log('World3DScene mounted')
+
+    return () => {
+      console.error('World3DScene unmounted')
+    }
+  }, [])
+
+  console.log('World3DScene rendering')
+
   return (
     <World3DSceneStyled>
       <KeyboardControls map={keyboardMap}>
