@@ -1,25 +1,24 @@
 'use client'
 
-import { useRef, useEffect, RefObject } from 'react'
-import { useFrame, useThree } from '@react-three/fiber'
-import { Vector3, Spherical } from 'three'
-import type { RapierRigidBody } from '@react-three/rapier'
+import { useRef, useEffect } from 'react'
+import { useThree } from '@react-three/fiber'
+import { PerspectiveCamera } from '@react-three/drei'
+import type { PerspectiveCamera as PerspectiveCameraType } from 'three'
 
-interface ThirdPersonCameraProps {
-  target: RefObject<RapierRigidBody | null>
-}
-
-const CAMERA_DISTANCE = 5
-const CAMERA_HEIGHT = 1
-const LERP_FACTOR = 0.1
 const MOUSE_SENSITIVITY = 0.005
-const MIN_POLAR_ANGLE = 0.1
-const MAX_POLAR_ANGLE = Math.PI - 0.1
+const MIN_POLAR_ANGLE = -Math.PI / 4 // Limit looking up
+const MAX_POLAR_ANGLE = Math.PI / 4 // Limit looking down
 
-export const ThirdPersonCamera = ({ target }: ThirdPersonCameraProps) => {
-  const { camera, gl } = useThree()
-  const spherical = useRef(new Spherical(CAMERA_DISTANCE, Math.PI / 3, 0))
+/**
+ * Third person camera component — child of RigidBody with fixed offset.
+ * Handles mouse rotation for orbiting around the player.
+ * Position is relative to parent (RigidBody), so it follows the player automatically.
+ */
+export const ThirdPersonCamera = () => {
+  const { gl } = useThree()
+  const cameraRef = useRef<PerspectiveCameraType>(null)
   const isDragging = useRef(false)
+  const rotation = useRef({ x: -0.3, y: 0 }) // Initial rotation (slight look down)
 
   useEffect(() => {
     const canvas = gl.domElement
@@ -35,16 +34,21 @@ export const ThirdPersonCamera = ({ target }: ThirdPersonCameraProps) => {
     }
 
     const onMouseMove = (e: MouseEvent) => {
-      if (!isDragging.current) {
+      if (!isDragging.current || !cameraRef.current) {
         return
       }
 
-      spherical.current.theta -= e.movementX * MOUSE_SENSITIVITY
-      spherical.current.phi += e.movementY * MOUSE_SENSITIVITY
-      spherical.current.phi = Math.max(
+      // Update rotation based on mouse movement
+      rotation.current.y -= e.movementX * MOUSE_SENSITIVITY
+      rotation.current.x -= e.movementY * MOUSE_SENSITIVITY
+      rotation.current.x = Math.max(
         MIN_POLAR_ANGLE,
-        Math.min(MAX_POLAR_ANGLE, spherical.current.phi),
+        Math.min(MAX_POLAR_ANGLE, rotation.current.x),
       )
+
+      // Apply rotation to camera
+      cameraRef.current.rotation.x = rotation.current.x
+      cameraRef.current.rotation.y = rotation.current.y
     }
 
     canvas.addEventListener('mousedown', onMouseDown)
@@ -58,30 +62,13 @@ export const ThirdPersonCamera = ({ target }: ThirdPersonCameraProps) => {
     }
   }, [gl])
 
-  useFrame(() => {
-    if (!target.current) {
-      return
-    }
-
-    const position = target.current.translation()
-    const targetPos = new Vector3(
-      position.x,
-      position.y + CAMERA_HEIGHT,
-      position.z,
-    )
-
-    // console.log(
-    //   'Player position',
-    //   `X: ${debugPosition.x.toFixed(2)} Y: ${debugPosition.y.toFixed(2)} Z:{' '}
-    //         ${debugPosition.z.toFixed(2)}`,
-    // )
-
-    const offset = new Vector3().setFromSpherical(spherical.current)
-    const idealPosition = targetPos.clone().add(offset)
-
-    camera.position.lerp(idealPosition, LERP_FACTOR)
-    camera.lookAt(targetPos)
-  })
-
-  return null
+  return (
+    // Camera with fixed offset: 3 units up, 5 units back from player
+    <PerspectiveCamera
+      ref={cameraRef}
+      makeDefault
+      position={[0, 3, 5]}
+      rotation={[rotation.current.x, rotation.current.y, 0]}
+    />
+  )
 }

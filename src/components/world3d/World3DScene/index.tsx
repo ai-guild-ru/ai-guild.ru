@@ -42,8 +42,9 @@ export const World3DScene: React.FC = () => {
               <Ground />
               <Building
                 url="/assets/gltf/buildings/gildenhaus/scene.gltf"
-                position={[5, 0, -10]}
-                scale={2}
+                position={[5, 0, -70]}
+                rotation={[0, 1.6, 0]}
+                scale={2.2}
               />
               <Player />
             </Physics>

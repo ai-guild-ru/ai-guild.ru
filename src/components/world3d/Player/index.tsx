@@ -229,7 +229,7 @@ export const Player: React.FC = () => {
         position={[0, 2, 0]}
         enabledRotations={[false, false, false]}
         linearDamping={0.5}
-        rotation={[0, 0, 0]}
+        rotation={[0, 1.8, 0]}
       >
         {/* Капсульный коллайдер для физических столкновений */}
         <CapsuleCollider args={[0.5, 0.5]} position={[0, 1, 0]} />
@@ -241,11 +241,11 @@ export const Player: React.FC = () => {
         {/* Группа для аватара — вращается при движении */}
         <group ref={avatarRef} position={[0, 0, 0]}>
           {/* 3D модель персонажа */}
-          <primitive object={scene} scale={1} />
+          <primitive object={scene} scale={0.6} />
         </group>
+        {/* Камера третьего лица — дочерний объект RigidBody, вращается мышкой */}
+        <ThirdPersonCamera />
       </RigidBody>
-      {/* Камера третьего лица, следует за игроком */}
-      <ThirdPersonCamera target={rigidBodyRef} />
       {/* HTML overlay для отображения координат (отладка) */}
       <Html position={[0, 3, 0]} center style={{ pointerEvents: 'none' }}>
         <div
