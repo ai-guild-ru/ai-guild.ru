@@ -9,7 +9,7 @@ import { Ground } from '../Ground'
 import { Player } from '../Player'
 import { Lighting } from '../Lighting'
 import { Building } from '../Building'
-import { World3DSceneStyled } from './styles'
+import { World3DSceneGlobalStyles, World3DSceneStyled } from './styles'
 
 const keyboardMap = [
   { name: 'forward', keys: ['KeyW', 'ArrowUp'] },
@@ -32,25 +32,29 @@ export const World3DScene: React.FC = () => {
   console.log('World3DScene rendering')
 
   return (
-    <World3DSceneStyled>
-      <KeyboardControls map={keyboardMap}>
-        <Canvas shadows camera={{ position: [0, 5, 10], fov: 60 }}>
-          <Suspense fallback={null}>
-            <Stats />
-            <Physics gravity={[0, -9.81, 0]}>
-              <Lighting />
-              <Ground />
-              <Building
-                url="/assets/gltf/buildings/gildenhaus/scene.gltf"
-                position={[5, 0, -70]}
-                rotation={[0, 1.6, 0]}
-                scale={2.2}
-              />
-              <Player />
-            </Physics>
-          </Suspense>
-        </Canvas>
-      </KeyboardControls>
-    </World3DSceneStyled>
+    <>
+      <World3DSceneGlobalStyles />
+      <World3DSceneStyled>
+        <KeyboardControls map={keyboardMap}>
+          <Canvas shadows camera={{ position: [0, 5, 10], fov: 60 }}>
+            <Suspense fallback={null}>
+              <Stats />
+              <Physics gravity={[0, -9.81, 0]}>
+                <axesHelper args={[10]} />
+                <Lighting />
+                <Ground />
+                <Building
+                  url="/assets/gltf/buildings/gildenhaus/scene.gltf"
+                  position={[5, 0, -70]}
+                  rotation={[0, 1.6, 0]}
+                  scale={2.2}
+                />
+                <Player />
+              </Physics>
+            </Suspense>
+          </Canvas>
+        </KeyboardControls>
+      </World3DSceneStyled>
+    </>
   )
 }

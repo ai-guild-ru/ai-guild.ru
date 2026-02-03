@@ -12,6 +12,7 @@ import {
 import { Vector3, Group, AnimationClip } from 'three'
 import type { RapierRigidBody } from '@react-three/rapier'
 import { ThirdPersonCamera } from '../ThirdPersonCamera'
+import { DebugOverlay } from '../DebugOverlay'
 
 const lft_models_pth = '/assets/gltf'
 const MODEL_PATH = `${lft_models_pth}/avatars/models/avatar.glb`
@@ -66,6 +67,7 @@ useGLTF.preload(ANIMATION_PATHS.jump)
  */
 export const Player: React.FC = () => {
   const rigidBodyRef = useRef<RapierRigidBody>(null)
+  const rigidBodyGroupRef = useRef<Group>(null)
   const avatarRef = useRef<Group>(null)
   const [debugPosition, setDebugPosition] = useState<Position>({
     x: 0,
@@ -229,22 +231,26 @@ export const Player: React.FC = () => {
         position={[0, 2, 0]}
         enabledRotations={[false, false, false]}
         linearDamping={0.5}
-        rotation={[0, 1.8, 0]}
+        // rotation={[0, 1.8, 0]}
+        rotation={[0, 0, 0]}
       >
-        {/* Капсульный коллайдер для физических столкновений */}
-        <CapsuleCollider args={[0.5, 0.5]} position={[0, 1, 0]} />
-        {/* Wireframe mesh для визуализации границ коллайдера (отладка) */}
-        <mesh position={[0, 1, 0]}>
-          <capsuleGeometry args={[0.5, 1, 8, 16]} />
-          <meshBasicMaterial color="cyan" wireframe />
-        </mesh>
-        {/* Группа для аватара — вращается при движении */}
-        <group ref={avatarRef} position={[0, 0, 0]}>
-          {/* 3D модель персонажа */}
-          <primitive object={scene} scale={0.6} />
+        {/* Группа-обёртка для отслеживания визуального объекта RigidBody */}
+        <group ref={rigidBodyGroupRef}>
+          {/* Капсульный коллайдер для физических столкновений */}
+          <CapsuleCollider args={[0.5, 0.5]} position={[0, 1, 0]} />
+          {/* Wireframe mesh для визуализации границ коллайдера (отладка) */}
+          <mesh position={[0, 1, 0]}>
+            <capsuleGeometry args={[0.5, 1, 8, 16]} />
+            <meshBasicMaterial color="cyan" wireframe />
+          </mesh>
+          {/* Группа для аватара — вращается при движении */}
+          <group ref={avatarRef} position={[0, 0, 0]}>
+            {/* 3D модель персонажа */}
+            <primitive object={scene} scale={0.6} />
+          </group>
+          {/* Камера третьего лица — дочерний объект RigidBody, вращается мышкой */}
+          <ThirdPersonCamera />
         </group>
-        {/* Камера третьего лица — дочерний объект RigidBody, вращается мышкой */}
-        <ThirdPersonCamera />
       </RigidBody>
       {/* HTML overlay для отображения координат (отладка) */}
       <Html position={[0, 3, 0]} center style={{ pointerEvents: 'none' }}>
@@ -263,6 +269,8 @@ export const Player: React.FC = () => {
           {debugPosition.z.toFixed(2)}
         </div>
       </Html>
+      {/* Компонент отладки — отображает направления объектов */}
+      <DebugOverlay rigidBodyRef={rigidBodyGroupRef} avatarRef={avatarRef} />
     </>
   )
 }

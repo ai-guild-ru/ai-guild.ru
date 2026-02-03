@@ -1,6 +1,8 @@
+/* eslint-disable no-console */
 'use client'
 
-import { useRef, useEffect } from 'react'
+import React, { useRef, useEffect } from 'react'
+import * as THREE from 'three'
 import { useThree } from '@react-three/fiber'
 import { PerspectiveCamera } from '@react-three/drei'
 import type { PerspectiveCamera as PerspectiveCameraType } from 'three'
@@ -14,11 +16,23 @@ const MAX_POLAR_ANGLE = Math.PI / 4 // Limit looking down
  * Handles mouse rotation for orbiting around the player.
  * Position is relative to parent (RigidBody), so it follows the player automatically.
  */
-export const ThirdPersonCamera = () => {
+export const ThirdPersonCamera: React.FC = () => {
   const { gl } = useThree()
   const cameraRef = useRef<PerspectiveCameraType>(null)
   const isDragging = useRef(false)
-  const rotation = useRef({ x: -0.3, y: 0 }) // Initial rotation (slight look down)
+  const rotation = useRef({ x: 0.3, y: Math.PI }) // Initial rotation (slight look down, facing avatar's back)
+
+  useEffect(() => {
+    if (cameraRef.current) {
+      const cam = cameraRef.current
+      console.log('[Camera] Position:', cam.position.toArray())
+      console.log('[Camera] Rotation:', cam.rotation.toArray())
+      console.log(
+        '[Camera] World Direction:',
+        cam.getWorldDirection(new THREE.Vector3()).toArray(),
+      )
+    }
+  }, [])
 
   useEffect(() => {
     const canvas = gl.domElement
@@ -67,7 +81,7 @@ export const ThirdPersonCamera = () => {
     <PerspectiveCamera
       ref={cameraRef}
       makeDefault
-      position={[0, 3, 5]}
+      position={[0, 2.3, -6]}
       rotation={[rotation.current.x, rotation.current.y, 0]}
     />
   )
