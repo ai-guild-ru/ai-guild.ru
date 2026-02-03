@@ -57,13 +57,13 @@ export const World3DScene: React.FC = () => {
                 {/* Test spatial audio source - positioned near the building */}
                 <SpatialAudioSource
                   url="/assets/sounds/test.mp3"
-                  position={[4, 2, 6]}
-                  rotation={[0, Math.PI * 1.2, 0]}
-                  refDistance={5}
-                  maxDistance={20}
+                  position={[0, 2, 0]}
+                  rotation={[0, 0, 0]}
+                  refDistance={0.1}
+                  maxDistance={4}
                   rolloffFactor={1}
-                  coneInnerAngle={90}
-                  coneOuterAngle={180}
+                  coneInnerAngle={30}
+                  coneOuterAngle={90}
                   coneOuterGain={0.1}
                   debug={debug}
                 />

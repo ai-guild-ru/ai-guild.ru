@@ -73,6 +73,8 @@ export const Player: React.FC<PlayerProps> = ({ debug }) => {
   const rigidBodyGroupRef = useRef<Group>(null)
   // avatarRef — группа с 3D моделью персонажа
   const avatarRef = useRef<Group>(null)
+  // headRef — точка "головы" для AudioListener
+  const headRef = useRef<Group>(null)
 
   // === State ===
   // Централизованное состояние игрока через reducer (анимация, debug позиция)
@@ -138,15 +140,15 @@ export const Player: React.FC<PlayerProps> = ({ debug }) => {
     }
   }, [gl])
 
-  // AudioListener attached to avatar for spatial audio (not camera!)
+  // AudioListener attached to head group for spatial audio
   useEffect(() => {
-    const group = rigidBodyGroupRef.current
-    if (!group) {
+    const head = headRef.current
+    if (!head) {
       return
     }
 
     const listener = new AudioListener()
-    group.add(listener)
+    head.add(listener)
 
     // Resume AudioContext on user interaction (browser autoplay policy)
     const resumeContext = () => {
@@ -161,7 +163,7 @@ export const Player: React.FC<PlayerProps> = ({ debug }) => {
     return () => {
       document.removeEventListener('click', resumeContext)
       document.removeEventListener('keydown', resumeContext)
-      group.remove(listener)
+      head.remove(listener)
     }
   }, [])
 
@@ -366,13 +368,30 @@ export const Player: React.FC<PlayerProps> = ({ debug }) => {
         colliders={false}
         mass={1}
         type="dynamic"
-        position={[0, 2, 0]}
+        position={[0, 2, -10]}
         rotation={[0, 0, 0]}
         enabledRotations={[false, false, false]}
         linearDamping={0.5}
       >
         {/* Группа-обёртка для отслеживания визуального объекта RigidBody */}
         <group ref={rigidBodyGroupRef}>
+          {/* Head group — AudioListener attachment point.
+             rotation={[0, Math.PI, 0]} — разворот на 180° для корректной
+             ориентации AudioListener. Без этого лево-право инвертированы,
+             т.к. модель аватара создана с "передом" в +Z, а Three.js ожидает -Z. */}
+          <group
+            ref={headRef}
+            position={[0, 2.1, 0]}
+            rotation={[0, Math.PI, 0]}
+          >
+            {/* Debug ring for AudioListener position */}
+            {debug && (
+              <mesh rotation={[Math.PI / 2, 0, 0]}>
+                <ringGeometry args={[0.9, 1, 32]} />
+                <meshBasicMaterial color="orange" side={2} />
+              </mesh>
+            )}
+          </group>
           {/* Капсульный коллайдер для физических столкновений */}
           <CapsuleCollider args={[0.5, 0.5]} position={[0, 1, 0]} />
           {/* Wireframe mesh для визуализации границ коллайдера (отладка) */}
