@@ -3,24 +3,32 @@
 
 import React, { useRef, useEffect } from 'react'
 import * as THREE from 'three'
-import { useThree } from '@react-three/fiber'
 import { PerspectiveCamera } from '@react-three/drei'
 import type { PerspectiveCamera as PerspectiveCameraType } from 'three'
 
-const MOUSE_SENSITIVITY = 0.005
-const MIN_POLAR_ANGLE = -Math.PI / 4 // Limit looking up
-const MAX_POLAR_ANGLE = Math.PI / 4 // Limit looking down
+const CAMERA_DISTANCE = 6 // Расстояние камеры от pivot
+const PIVOT_HEIGHT = 1.7 // Высота pivot (примерно голова)
+
+interface ThirdPersonCameraProps {
+  pitch: number // Вертикальный угол камеры (управляется из Player)
+  yaw?: number // Горизонтальный угол камеры относительно аватара
+}
 
 /**
  * Third person camera component — child of RigidBody with fixed offset.
- * Handles mouse rotation for orbiting around the player.
- * Position is relative to parent (RigidBody), so it follows the player automatically.
+ * Камера орбитирует вокруг игрока по вертикали (pitch).
+ * Горизонтальный поворот управляется через rotationRef в Player (аватар крутится).
+ *
+ * Структура:
+ * - pivotRef (group) — точка вращения на уровне головы игрока
+ * - cameraRef (PerspectiveCamera) — камера со смещением назад от pivot
  */
-export const ThirdPersonCamera: React.FC = () => {
-  const { gl } = useThree()
+export const ThirdPersonCamera: React.FC<ThirdPersonCameraProps> = ({
+  pitch,
+  yaw = 0,
+}) => {
+  const pivotRef = useRef<THREE.Group>(null)
   const cameraRef = useRef<PerspectiveCameraType>(null)
-  const isDragging = useRef(false)
-  const rotation = useRef({ x: 0.3, y: Math.PI }) // Initial rotation (slight look down, facing avatar's back)
 
   useEffect(() => {
     if (cameraRef.current) {
@@ -34,55 +42,23 @@ export const ThirdPersonCamera: React.FC = () => {
     }
   }, [])
 
-  useEffect(() => {
-    const canvas = gl.domElement
-
-    const onMouseDown = (e: MouseEvent) => {
-      if (e.button === 0) {
-        isDragging.current = true
-      }
-    }
-
-    const onMouseUp = () => {
-      isDragging.current = false
-    }
-
-    const onMouseMove = (e: MouseEvent) => {
-      if (!isDragging.current || !cameraRef.current) {
-        return
-      }
-
-      // Update rotation based on mouse movement
-      rotation.current.y -= e.movementX * MOUSE_SENSITIVITY
-      rotation.current.x -= e.movementY * MOUSE_SENSITIVITY
-      rotation.current.x = Math.max(
-        MIN_POLAR_ANGLE,
-        Math.min(MAX_POLAR_ANGLE, rotation.current.x),
-      )
-
-      // Apply rotation to camera
-      cameraRef.current.rotation.x = rotation.current.x
-      cameraRef.current.rotation.y = rotation.current.y
-    }
-
-    canvas.addEventListener('mousedown', onMouseDown)
-    window.addEventListener('mouseup', onMouseUp)
-    window.addEventListener('mousemove', onMouseMove)
-
-    return () => {
-      canvas.removeEventListener('mousedown', onMouseDown)
-      window.removeEventListener('mouseup', onMouseUp)
-      window.removeEventListener('mousemove', onMouseMove)
-    }
-  }, [gl])
-
   return (
-    // Camera with fixed offset: 3 units up, 5 units back from player
-    <PerspectiveCamera
-      ref={cameraRef}
-      makeDefault
-      position={[0, 2.3, -6]}
-      rotation={[rotation.current.x, rotation.current.y, 0]}
-    />
+    // Yaw group — горизонтальный поворот камеры относительно аватара
+    <group rotation={[0, yaw, 0]}>
+      {/* Pivot group на уровне головы — вертикальный наклон (pitch) */}
+      <group
+        ref={pivotRef}
+        position={[0, PIVOT_HEIGHT, 0]}
+        rotation={[pitch, 0, 0]}
+      >
+        {/* Камера со смещением назад от pivot */}
+        <PerspectiveCamera
+          ref={cameraRef}
+          makeDefault
+          position={[0, 0, -CAMERA_DISTANCE]}
+          rotation={[0, Math.PI, 0]} // Смотрит на pivot (на игрока)
+        />
+      </group>
+    </group>
   )
 }

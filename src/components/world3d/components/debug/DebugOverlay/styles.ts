@@ -52,8 +52,8 @@ export const DebugOverlayRotationStyled = styled.div`
 
 export const DebugOverlayStyled = styled(Html)`
   position: fixed;
-  bottom: 10px;
-  left: 10px;
+  bottom: 60px;
+  left: 60px;
   font-size: 14px;
   transform: none;
   z-index: 10000;

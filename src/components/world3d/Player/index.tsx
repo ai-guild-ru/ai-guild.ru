@@ -1,18 +1,22 @@
 'use client'
 
-import { useRef, useState, useEffect, useMemo } from 'react'
-import { useFrame } from '@react-three/fiber'
+import { useRef, useEffect, useMemo, useState } from 'react'
+import { useFrame, useThree } from '@react-three/fiber'
 import { RigidBody, CapsuleCollider } from '@react-three/rapier'
-import {
-  useKeyboardControls,
-  Html,
-  useGLTF,
-  useAnimations,
-} from '@react-three/drei'
+import { useKeyboardControls, useGLTF, useAnimations } from '@react-three/drei'
 import { Vector3, Group, AnimationClip } from 'three'
 import type { RapierRigidBody } from '@react-three/rapier'
 import { ThirdPersonCamera } from '../ThirdPersonCamera'
-import { DebugOverlay } from '../DebugOverlay'
+import { usePlayerReducer } from './hooks/usePlayerReducer'
+import { AnimationName } from './interfaces'
+import { DebugCapsuleGeometry } from '../components/debug/DebugCapsuleGeometry'
+import { DebugAvatarGeometry } from '../components/debug/DebugAvatarGeometry'
+import { DebugOverlay } from '../components/debug/DebugOverlay'
+
+const TURN_SPEED = 2.5 // Скорость поворота (радиан/сек)
+const MOUSE_SENSITIVITY = 0.005
+const MIN_PITCH = -Math.PI / 6 // Минимальный pitch (смотрим вверх)
+const MAX_PITCH = Math.PI / 3 // Максимальный pitch (смотрим вниз)
 
 const lft_models_pth = '/assets/gltf'
 const MODEL_PATH = `${lft_models_pth}/avatars/models/avatar.glb`
@@ -23,20 +27,12 @@ const ANIMATION_PATHS = {
   jump: `${lft_models_pth}/avatars/animations/jump.glb`,
 }
 
-type AnimationName = 'idle' | 'walk' | 'run' | 'jump'
-
 // Модификатор скорости — умножает базовые скорости анимаций и timeScale
 const SPEED_MULTIPLIER = 1
 // Базовые скорости из анализа анимаций (units/sec), умноженные на модификатор
 const WALK_SPEED = 3.5248 * SPEED_MULTIPLIER
 const RUN_SPEED = 11.6508 * SPEED_MULTIPLIER
 const JUMP_FORCE = 5
-
-interface Position {
-  x: number
-  y: number
-  z: number
-}
 
 /**
  * Удаляет root motion из анимации — убирает position track для Hips bone.
@@ -60,24 +56,87 @@ useGLTF.preload(ANIMATION_PATHS.walk)
 useGLTF.preload(ANIMATION_PATHS.run)
 useGLTF.preload(ANIMATION_PATHS.jump)
 
+type PlayerProps = {
+  debug: boolean
+}
+
 /**
  * Компонент игрока с физикой и анимациями.
  * Использует RigidBody для физического тела и CapsuleCollider для коллизий.
  * Анимации загружаются из отдельных GLB файлов и применяются к модели.
  */
-export const Player: React.FC = () => {
+export const Player: React.FC<PlayerProps> = ({ debug }) => {
+  // === Refs ===
+  // rigidBodyRef — ссылка на физическое тело Rapier для управления скоростью и позицией
   const rigidBodyRef = useRef<RapierRigidBody>(null)
+  // rigidBodyGroupRef — группа-обёртка внутри RigidBody, к ней применяется визуальный поворот
   const rigidBodyGroupRef = useRef<Group>(null)
+  // avatarRef — группа с 3D моделью персонажа
   const avatarRef = useRef<Group>(null)
-  const [debugPosition, setDebugPosition] = useState<Position>({
-    x: 0,
-    y: 0,
-    z: 0,
-  })
-  const [currentAnimation, setCurrentAnimation] =
-    useState<AnimationName>('idle')
+
+  // === State ===
+  // Централизованное состояние игрока через reducer (анимация, debug позиция)
+  const [state, dispatch] = usePlayerReducer()
+  // Угол поворота персонажа (в ref для мгновенного обновления в useFrame)
+  const rotationRef = useRef(0)
+  // Флаг для однократного разворота на 180° при нажатии S
+  const wasBackwardRef = useRef(false)
+  // Счётчик кадров для throttling обновления debug позиции
   const frameCount = useRef(0)
+  // Вертикальный угол камеры (pitch) — управляется мышкой
+  const cameraPitchRef = useRef(0.2)
+  const [cameraPitch, setCameraPitch] = useState(0.2)
+  // Горизонтальный угол камеры (yaw) — дополнительный поворот относительно аватара
+  const [cameraYaw, setCameraYaw] = useState(0)
+  // Флаг для отслеживания зажатия мыши
+  const isDragging = useRef(false)
+
+  // === Input ===
+  // Получение состояния клавиш (WASD, Shift, Space)
   const [, getKeys] = useKeyboardControls()
+  const { gl } = useThree()
+
+  // === Обработка мыши ===
+  useEffect(() => {
+    const canvas = gl.domElement
+
+    const onMouseDown = (e: MouseEvent) => {
+      if (e.button === 0) {
+        isDragging.current = true
+      }
+    }
+
+    const onMouseUp = () => {
+      isDragging.current = false
+    }
+
+    const onMouseMove = (e: MouseEvent) => {
+      if (!isDragging.current) {
+        return
+      }
+
+      // Горизонталь: движение мыши влево -> поворот аватара влево
+      rotationRef.current -= e.movementX * MOUSE_SENSITIVITY
+
+      // Вертикаль: тянем вниз -> камера опускается (смотрим вверх)
+      cameraPitchRef.current += e.movementY * MOUSE_SENSITIVITY
+      cameraPitchRef.current = Math.max(
+        MIN_PITCH,
+        Math.min(MAX_PITCH, cameraPitchRef.current),
+      )
+      setCameraPitch(cameraPitchRef.current)
+    }
+
+    canvas.addEventListener('mousedown', onMouseDown)
+    window.addEventListener('mouseup', onMouseUp)
+    window.addEventListener('mousemove', onMouseMove)
+
+    return () => {
+      canvas.removeEventListener('mousedown', onMouseDown)
+      window.removeEventListener('mouseup', onMouseUp)
+      window.removeEventListener('mousemove', onMouseMove)
+    }
+  }, [gl])
 
   const { scene } = useGLTF(MODEL_PATH)
   const idleGltf = useGLTF(ANIMATION_PATHS.idle)
@@ -131,49 +190,99 @@ export const Player: React.FC = () => {
   // }, [animations, actions, scene, mixer])
 
   useEffect(() => {
-    if (actions[currentAnimation]) {
+    if (actions[state.animation]) {
       Object.values(actions).forEach((action) => action?.fadeOut(0.2))
-      const action = actions[currentAnimation]
+      const action = actions[state.animation]
       action?.reset().fadeIn(0.2).play()
       // Ускоряем анимацию пропорционально модификатору скорости
-      if (currentAnimation === 'walk' || currentAnimation === 'run') {
+      if (action && (state.animation === 'walk' || state.animation === 'run')) {
         action.timeScale = SPEED_MULTIPLIER
       }
     } else {
-      console.error('[Player] Animation not found:', currentAnimation)
+      console.error('[Player] Animation not found:', state.animation)
     }
-  }, [currentAnimation, actions])
+  }, [state.animation, actions])
 
+  // Вектор направления движения (переиспользуется каждый кадр)
   const direction = new Vector3()
-  const frontVector = new Vector3()
-  const sideVector = new Vector3()
 
-  useFrame((state) => {
+  /**
+   * Основной игровой цикл — вызывается каждый кадр.
+   * Обрабатывает ввод, обновляет физику и состояние анимации.
+   */
+  useFrame((_, delta) => {
     if (!rigidBodyRef.current) {
       return
     }
 
+    // --- Отладка delta ---
+    frameCount.current++
+    if (frameCount.current % 60 === 0) {
+      // eslint-disable-next-line no-console
+      console.log(
+        `[Player] frame: ${frameCount.current}, delta: ${delta.toFixed(4)}s, FPS: ${(1 / delta).toFixed(1)}`,
+      )
+    }
+
+    // --- Чтение ввода ---
     const { forward, backward, left, right, run, jump } = getKeys()
 
+    // --- Получение текущего состояния физики ---
     const velocity = rigidBodyRef.current.linvel()
     const position = rigidBodyRef.current.translation()
 
+    // --- Расчёт скорости ---
     const speed = run ? RUN_SPEED : WALK_SPEED
 
-    frontVector.set(0, 0, (backward ? 1 : 0) - (forward ? 1 : 0))
-    sideVector.set((left ? 1 : 0) - (right ? 1 : 0), 0, 0)
+    // --- Обработка поворота (A/D) ---
+    // A — поворот влево (увеличение угла)
+    if (left) {
+      rotationRef.current += TURN_SPEED * delta
+    }
+    // D — поворот вправо (уменьшение угла)
+    if (right) {
+      rotationRef.current -= TURN_SPEED * delta
+    }
 
-    direction
-      .subVectors(frontVector, sideVector)
-      .normalize()
-      .multiplyScalar(speed)
-      .applyEuler(state.camera.rotation)
+    // --- Обработка разворота (S) ---
+    // При нажатии S — разворот на 180° (персонаж идёт на камеру)
+    if (backward && !forward && !wasBackwardRef.current) {
+      rotationRef.current += Math.PI
+      wasBackwardRef.current = true
+    }
+    // При отпускании S — сброс флага для следующего разворота
+    if (!backward) {
+      wasBackwardRef.current = false
+    }
 
+    // Обновляем yaw камеры: при движении назад — поворот на 180°
+    const newCameraYaw = backward && !forward ? Math.PI : 0
+    if (newCameraYaw !== cameraYaw) {
+      setCameraYaw(newCameraYaw)
+    }
+
+    // --- Расчёт направления движения ---
+    // W или S — движение вперёд в направлении взгляда персонажа
+    const isMovingForward = forward || backward
+    if (isMovingForward) {
+      // Вектор движения: sin/cos от угла поворота * скорость
+      direction.set(
+        Math.sin(rotationRef.current) * speed,
+        0,
+        Math.cos(rotationRef.current) * speed,
+      )
+    } else {
+      direction.set(0, 0, 0)
+    }
+
+    // --- Применение скорости к физическому телу ---
+    // Сохраняем вертикальную скорость (гравитация/прыжок)
     rigidBodyRef.current.setLinvel(
       { x: direction.x, y: velocity.y, z: direction.z },
       true,
     )
 
+    // --- Обработка прыжка ---
     const isOnGround = position.y < 1.1
     if (jump && isOnGround) {
       rigidBodyRef.current.setLinvel(
@@ -182,25 +291,27 @@ export const Player: React.FC = () => {
       )
     }
 
-    const isMoving = forward || backward || left || right
+    // --- Определение анимации ---
     let newAnimation: AnimationName = 'idle'
     if (!isOnGround) {
       newAnimation = 'jump'
-    } else if (isMoving) {
+    } else if (isMovingForward) {
       newAnimation = run ? 'run' : 'walk'
     }
-    if (newAnimation !== currentAnimation) {
-      setCurrentAnimation(newAnimation)
+    dispatch({ type: 'SET_ANIMATION', payload: newAnimation })
+
+    // --- Применение визуального поворота ---
+    // Поворачиваем группу (аватар + камера) в направлении движения
+    if (rigidBodyGroupRef.current) {
+      rigidBodyGroupRef.current.rotation.y = rotationRef.current
     }
 
-    if (isMoving && avatarRef.current) {
-      const angle = Math.atan2(direction.x, direction.z)
-      avatarRef.current.rotation.y = angle
-    }
-
-    frameCount.current++
+    // --- Обновление debug позиции (throttled) ---
     if (frameCount.current % 10 === 0) {
-      setDebugPosition({ x: position.x, y: position.y, z: position.z })
+      dispatch({
+        type: 'SET_DEBUG_POSITION',
+        payload: { x: position.x, y: position.y, z: position.z },
+      })
     }
   })
 
@@ -239,38 +350,40 @@ export const Player: React.FC = () => {
           {/* Капсульный коллайдер для физических столкновений */}
           <CapsuleCollider args={[0.5, 0.5]} position={[0, 1, 0]} />
           {/* Wireframe mesh для визуализации границ коллайдера (отладка) */}
-          <mesh position={[0, 1, 0]}>
-            <capsuleGeometry args={[0.5, 1, 8, 16]} />
-            <meshBasicMaterial color="cyan" wireframe />
-          </mesh>
+
+          {debug && <DebugCapsuleGeometry />}
+
           {/* Группа для аватара — вращается при движении */}
           <group ref={avatarRef} position={[0, 0, 0]}>
             {/* 3D модель персонажа */}
             <primitive object={scene} scale={0.6} />
           </group>
-          {/* Камера третьего лица — дочерний объект RigidBody, вращается мышкой */}
-          <ThirdPersonCamera />
+          {/* Камера третьего лица — дочерний объект RigidBody */}
+          <ThirdPersonCamera pitch={cameraPitch} yaw={cameraYaw} />
         </group>
       </RigidBody>
       {/* HTML overlay для отображения координат (отладка) */}
-      <Html position={[0, 3, 0]} center style={{ pointerEvents: 'none' }}>
-        <div
+      {debug && (
+        <DebugOverlay
+          title="Avatar coords"
           style={{
-            background: 'rgba(0,0,0,0.7)',
-            color: '#0f0',
-            padding: '8px 12px',
-            borderRadius: '4px',
-            fontFamily: 'monospace',
-            fontSize: '12px',
-            whiteSpace: 'nowrap',
+            bottom: 280,
           }}
         >
-          X: {debugPosition.x.toFixed(2)} Y: {debugPosition.y.toFixed(2)} Z:{' '}
-          {debugPosition.z.toFixed(2)}
-        </div>
-      </Html>
+          <>
+            X: {state.debugPosition.x.toFixed(2)} Y:{' '}
+            {state.debugPosition.y.toFixed(2)} Z:{' '}
+            {state.debugPosition.z.toFixed(2)}
+          </>
+        </DebugOverlay>
+      )}
       {/* Компонент отладки — отображает направления объектов */}
-      <DebugOverlay rigidBodyRef={rigidBodyGroupRef} avatarRef={avatarRef} />
+      {debug && (
+        <DebugAvatarGeometry
+          rigidBodyRef={rigidBodyGroupRef}
+          avatarRef={avatarRef}
+        />
+      )}
     </>
   )
 }

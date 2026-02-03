@@ -11,6 +11,9 @@ import { Lighting } from '../Lighting'
 import { Building } from '../Building'
 import { World3DSceneGlobalStyles, World3DSceneStyled } from './styles'
 
+const debug = process.env.NEXT_PUBLIC_DEBUG_WORLD3D === 'true'
+const debugPhysics = process.env.NEXT_PUBLIC_DEBUG_WORLD3D_PHYSICS === 'true'
+
 const keyboardMap = [
   { name: 'forward', keys: ['KeyW', 'ArrowUp'] },
   { name: 'backward', keys: ['KeyS', 'ArrowDown'] },
@@ -38,18 +41,18 @@ export const World3DScene: React.FC = () => {
         <KeyboardControls map={keyboardMap}>
           <Canvas shadows camera={{ position: [0, 5, 10], fov: 60 }}>
             <Suspense fallback={null}>
-              <Stats />
-              <Physics gravity={[0, -9.81, 0]}>
-                <axesHelper args={[10]} />
+              {debug && <Stats />}
+              <Physics gravity={[0, -9.81, 0]} debug={debug && debugPhysics}>
+                {debug && <axesHelper args={[10]} />}
                 <Lighting />
                 <Ground />
                 <Building
                   url="/assets/gltf/buildings/gildenhaus/scene.gltf"
-                  position={[5, 0, -70]}
+                  position={[0, 0.1, 20]}
                   rotation={[0, 1.6, 0]}
                   scale={2.2}
                 />
-                <Player />
+                <Player debug={debug} />
               </Physics>
             </Suspense>
           </Canvas>
