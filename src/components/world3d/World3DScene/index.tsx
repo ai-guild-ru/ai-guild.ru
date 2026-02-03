@@ -7,6 +7,7 @@ import { Suspense } from 'react'
 import { Ground } from '../Ground'
 import { Player } from '../Player'
 import { Lighting } from '../Lighting'
+import { Building } from '../Building'
 import { World3DSceneStyled } from './styles'
 
 const keyboardMap = [
@@ -28,6 +29,11 @@ export const World3DScene: React.FC = () => {
             <Physics gravity={[0, -9.81, 0]}>
               <Lighting />
               <Ground />
+              <Building
+                url="/assets/gltf/buildings/gildenhaus/scene.gltf"
+                position={[5, 0, -10]}
+                scale={2}
+              />
               <Player />
             </Physics>
           </Suspense>

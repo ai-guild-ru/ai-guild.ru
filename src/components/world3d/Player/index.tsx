@@ -192,10 +192,11 @@ export const Player: React.FC = () => {
         position={[0, 2, 0]}
         enabledRotations={[false, false, false]}
         linearDamping={0.5}
+        rotation={[0, 0, 0]}
       >
         <CapsuleCollider args={[0.5, 0.5]} position={[0, 1, 0]} />
         <group ref={avatarRef} position={[0, 0, 0]}>
-          <primitive object={scene} scale={1} />
+          <primitive object={scene} scale={0.6} />
         </group>
       </RigidBody>
       <ThirdPersonCamera target={rigidBodyRef} />
