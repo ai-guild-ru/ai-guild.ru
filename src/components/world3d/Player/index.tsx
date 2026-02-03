@@ -4,7 +4,7 @@ import { useRef, useEffect, useMemo, useState } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import { RigidBody, CapsuleCollider } from '@react-three/rapier'
 import { useKeyboardControls, useGLTF, useAnimations } from '@react-three/drei'
-import { Vector3, Group, AnimationClip } from 'three'
+import { Vector3, Group, AnimationClip, AudioListener } from 'three'
 import type { RapierRigidBody } from '@react-three/rapier'
 import { ThirdPersonCamera } from '../ThirdPersonCamera'
 import { usePlayerReducer } from './hooks/usePlayerReducer'
@@ -137,6 +137,33 @@ export const Player: React.FC<PlayerProps> = ({ debug }) => {
       window.removeEventListener('mousemove', onMouseMove)
     }
   }, [gl])
+
+  // AudioListener attached to avatar for spatial audio (not camera!)
+  useEffect(() => {
+    const group = rigidBodyGroupRef.current
+    if (!group) {
+      return
+    }
+
+    const listener = new AudioListener()
+    group.add(listener)
+
+    // Resume AudioContext on user interaction (browser autoplay policy)
+    const resumeContext = () => {
+      if (listener.context.state === 'suspended') {
+        listener.context.resume()
+      }
+    }
+
+    document.addEventListener('click', resumeContext)
+    document.addEventListener('keydown', resumeContext)
+
+    return () => {
+      document.removeEventListener('click', resumeContext)
+      document.removeEventListener('keydown', resumeContext)
+      group.remove(listener)
+    }
+  }, [])
 
   const { scene } = useGLTF(MODEL_PATH)
   const idleGltf = useGLTF(ANIMATION_PATHS.idle)
@@ -340,10 +367,9 @@ export const Player: React.FC<PlayerProps> = ({ debug }) => {
         mass={1}
         type="dynamic"
         position={[0, 2, 0]}
+        rotation={[0, 0, 0]}
         enabledRotations={[false, false, false]}
         linearDamping={0.5}
-        // rotation={[0, 1.8, 0]}
-        rotation={[0, 0, 0]}
       >
         {/* Группа-обёртка для отслеживания визуального объекта RigidBody */}
         <group ref={rigidBodyGroupRef}>
