@@ -1,7 +1,6 @@
-/* eslint-disable no-console */
 'use client'
 
-import React, { useRef, useEffect } from 'react'
+import React, { useRef } from 'react'
 import * as THREE from 'three'
 import { PerspectiveCamera } from '@react-three/drei'
 import type { PerspectiveCamera as PerspectiveCameraType } from 'three'
@@ -29,18 +28,6 @@ export const ThirdPersonCamera: React.FC<ThirdPersonCameraProps> = ({
 }) => {
   const pivotRef = useRef<THREE.Group>(null)
   const cameraRef = useRef<PerspectiveCameraType>(null)
-
-  useEffect(() => {
-    if (cameraRef.current) {
-      const cam = cameraRef.current
-      console.log('[Camera] Position:', cam.position.toArray())
-      console.log('[Camera] Rotation:', cam.rotation.toArray())
-      console.log(
-        '[Camera] World Direction:',
-        cam.getWorldDirection(new THREE.Vector3()).toArray(),
-      )
-    }
-  }, [])
 
   return (
     // Yaw group — горизонтальный поворот камеры относительно аватара
