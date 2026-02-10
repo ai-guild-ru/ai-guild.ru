@@ -1,6 +1,8 @@
 # Dependencies
 node_modules/
 
+docker/world3d
+
 # Next.js
 .next/
 out/
