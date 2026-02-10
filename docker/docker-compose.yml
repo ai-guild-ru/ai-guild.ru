@@ -50,6 +50,22 @@ services:
     labels:
       - 'traefik.enable=true'
 
+  coturn:
+    image: coturn/coturn:latest
+    command:
+      - '--use-auth-secret'
+      - '--static-auth-secret=${TURN_SECRET}'
+      - '--realm=${TURN_REALM:-localhost}'
+      - '--listening-port=3478'
+      - '--tls-listening-port=5349'
+      - '--min-port=49152'
+      - '--max-port=49200'
+      - '--log-file=stdout'
+      - '--no-cli'
+      - '--fingerprint'
+    env_file:
+      - .env
+
 networks:
   default:
     name: ${NETWORK_NAME:-agicms-default}
