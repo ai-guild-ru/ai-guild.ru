@@ -24,9 +24,6 @@ services:
 
   coturn:
     restart: unless-stopped
-    ports:
-      - 3478:3478
-      - 3478:3478/udp
-      - 5349:5349
-      - 5349:5349/udp
-      - 49152-49200:49152-49200/udp
+
+  world3d:
+    restart: unless-stopped

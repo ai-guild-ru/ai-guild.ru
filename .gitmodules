@@ -1,0 +1,3 @@
+[submodule "docker/world3d"]
+	path = docker/world3d
+	url = https://github.com/ai-guild-ru/world3d.git

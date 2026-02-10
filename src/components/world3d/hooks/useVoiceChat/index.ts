@@ -19,6 +19,8 @@ const C2S_ICE_CANDIDATE = 'ice_candidate'
 interface UseVoiceChatOptions {
   /** Whether voice chat is enabled */
   enabled: boolean
+  /** Local player ID (userId) — used for deterministic offer ordering to prevent glare */
+  localPlayerId: string | null
   /** WebSocket ref from useMultiplayer — used for signaling */
   wsRef: React.MutableRefObject<WebSocket | null>
   /** Callback ref to subscribe to signaling messages from useMultiplayer */
@@ -44,6 +46,7 @@ export interface PeerState {
  */
 export function useVoiceChat({
   enabled,
+  localPlayerId,
   wsRef,
   onSignalingMessageRef,
   turnCredentialsRef,
@@ -234,6 +237,12 @@ export function useVoiceChat({
         return
       }
 
+      // Deterministic offer ordering: only the peer with the smaller ID initiates
+      // the offer to prevent glare (both sides sending offers simultaneously)
+      if (!localPlayerId || localPlayerId >= playerId) {
+        return
+      }
+
       const pc = createPeerConnection(playerId, true)
 
       try {
@@ -259,7 +268,7 @@ export function useVoiceChat({
         removePeer(playerId)
       }
     },
-    [createPeerConnection, sendSignaling, removePeer],
+    [createPeerConnection, sendSignaling, removePeer, localPlayerId],
   )
 
   /**
@@ -322,6 +331,14 @@ export function useVoiceChat({
 
           const peer = peersRef.current.get(fromPlayerId)
           if (!peer) {
+            return
+          }
+
+          // Guard against glare: answer is only valid when we are waiting for it
+          if (peer.pc.signalingState !== 'have-local-offer') {
+            console.warn(
+              `[voice][signal] Ignoring answer from ${fromPlayerId} — signalingState is ${peer.pc.signalingState}, expected have-local-offer`,
+            )
             return
           }
 

@@ -28,6 +28,21 @@ http:
       service: app
       priority: 1
 
+    world3d:
+      rule: 'PathPrefix(`/world3d-service`)'
+      entryPoints:
+        - web
+      middlewares:
+        - world3d-strip-prefix
+      service: world3d
+      priority: 100
+
+  middlewares:
+    world3d-strip-prefix:
+      stripPrefix:
+        prefixes:
+          - '/world3d-service'
+
   services:
     app:
       loadBalancer:
@@ -38,3 +53,8 @@ http:
       loadBalancer:
         servers:
           - url: 'http://app:5678'
+
+    world3d:
+      loadBalancer:
+        servers:
+          - url: 'http://world3d:4100'

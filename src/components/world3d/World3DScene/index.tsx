@@ -51,6 +51,7 @@ export const World3DScene: React.FC = () => {
   const { remoteStreams, isMuted, toggleMute, peersRef, localStreamRef } =
     useVoiceChat({
       enabled: !!user,
+      localPlayerId: user?.id ?? null,
       wsRef,
       onSignalingMessageRef,
       turnCredentialsRef,

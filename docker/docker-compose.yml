@@ -12,6 +12,8 @@ services:
         - DATABASE_URL=${DATABASE_URL}
         - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
         - NEXT_PUBLIC_TELEGRAM_BOT_NAME=${NEXT_PUBLIC_TELEGRAM_BOT_NAME}
+        - NEXT_PUBLIC_WORLD3D_WS_URL=${NEXT_PUBLIC_WORLD3D_WS_URL}
+        - NEXT_PUBLIC_DEBUG_WORLD3D=${NEXT_PUBLIC_DEBUG_WORLD3D}
     volumes:
       - ../public:/app/public
       - ../shared:/app/shared
@@ -63,8 +65,21 @@ services:
       - '--log-file=stdout'
       - '--no-cli'
       - '--fingerprint'
-    env_file:
-      - .env
+    ports:
+      - 3478:3478
+      - 3478:3478/udp
+      - 5349:5349
+      - 5349:5349/udp
+      - 49152-49200:49152-49200/udp
+
+  world3d:
+    build:
+      context: ./world3d
+    environment:
+      - JWT_SECRET=${JWT_SECRET}
+      - TURN_SECRET=${TURN_SECRET}
+      - TURN_REALM=${TURN_REALM:-localhost}
+      - TURN_HOST=${TURN_HOST:-coturn}
 
 networks:
   default:

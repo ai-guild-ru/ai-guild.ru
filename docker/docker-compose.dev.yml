@@ -24,10 +24,9 @@ services:
     ports:
       - 5432:5432
 
-  coturn:
+  world3d:
+    volumes:
+      - ./world3d/src:/app/src
+    command: 'npm run dev'
     ports:
-      - 3478:3478
-      - 3478:3478/udp
-      - 5349:5349
-      - 5349:5349/udp
-      - 49152-49200:49152-49200/udp
+      - 4100:4100
