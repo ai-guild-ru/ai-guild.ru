@@ -11,6 +11,7 @@ import { Lighting } from '../Lighting'
 import { Building } from '../Building'
 import { SpatialAudioSource } from '../SpatialAudioSource'
 import { MuteButton } from '../MuteButton'
+import { DebugVoiceChatOverlay } from '../components/debug/DebugVoiceChatOverlay'
 import { World3DSceneGlobalStyles, World3DSceneStyled } from './styles'
 import { useMultiplayer } from '../hooks/useMultiplayer'
 import { useVoiceChat } from '../hooks/useVoiceChat'
@@ -47,13 +48,14 @@ export const World3DScene: React.FC = () => {
   )
 
   // Voice chat — WebRTC P2P mesh with spatial audio
-  const { remoteStreams, isMuted, toggleMute } = useVoiceChat({
-    enabled: !!user,
-    wsRef,
-    onSignalingMessageRef,
-    turnCredentialsRef,
-    remotePlayerIds,
-  })
+  const { remoteStreams, isMuted, toggleMute, peersRef, localStreamRef } =
+    useVoiceChat({
+      enabled: !!user,
+      wsRef,
+      onSignalingMessageRef,
+      turnCredentialsRef,
+      remotePlayerIds,
+    })
 
   return (
     <>
@@ -101,6 +103,17 @@ export const World3DScene: React.FC = () => {
         </KeyboardControls>
         {/* Voice chat mute/unmute button — outside Canvas (HTML overlay) */}
         {user && <MuteButton isMuted={isMuted} onToggle={toggleMute} />}
+        {/* WebRTC voice chat debug overlay */}
+        {debug && user && (
+          <DebugVoiceChatOverlay
+            peersRef={peersRef}
+            localStreamRef={localStreamRef}
+            isMuted={isMuted}
+            remoteStreams={remoteStreams}
+            wsRef={wsRef}
+            turnCredentialsRef={turnCredentialsRef}
+          />
+        )}
       </World3DSceneStyled>
     </>
   )

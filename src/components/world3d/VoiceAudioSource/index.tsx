@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import * as THREE from 'three'
 import { useThree } from '@react-three/fiber'
 
@@ -20,6 +20,10 @@ interface VoiceAudioSourceProps {
  * Connects a WebRTC MediaStream to a Three.js PositionalAudio node
  * so the voice is heard in 3D space relative to the listener (local player).
  *
+ * Finds the existing AudioListener in the scene (attached to Player's head group)
+ * instead of creating a new one — ensures spatial audio uses the same listener
+ * as SpatialAudioSource components.
+ *
  * Placed as a child of RemotePlayer group — inherits position/rotation from parent.
  * Uses Web Audio API MediaStreamSource for zero-latency audio routing.
  */
@@ -29,45 +33,49 @@ export const VoiceAudioSource: React.FC<VoiceAudioSourceProps> = ({
   maxDistance = 25,
   rolloffFactor = 1,
 }) => {
-  const audioRef = useRef<THREE.PositionalAudio | null>(null)
-  const { camera } = useThree()
+  const { scene } = useThree()
+  // useState to trigger re-render when audio object is created
+  const [audio, setAudio] = useState<THREE.PositionalAudio | null>(null)
 
   useEffect(() => {
-    // Get or create AudioListener on the camera
-    let listener = camera.children.find(
-      (child): child is THREE.AudioListener =>
-        child instanceof THREE.AudioListener,
-    )
+    // Find existing AudioListener in the scene (attached to Player's head group)
+    let listener: THREE.AudioListener | undefined
+    scene.traverse((obj) => {
+      if (obj instanceof THREE.AudioListener) {
+        listener = obj
+      }
+    })
+
     if (!listener) {
-      listener = new THREE.AudioListener()
-      camera.add(listener)
+      console.warn('[VoiceAudioSource] No AudioListener found in scene')
+      return
     }
 
     // Create PositionalAudio and connect the MediaStream
-    const audio = new THREE.PositionalAudio(listener)
-    audio.setRefDistance(refDistance)
-    audio.setMaxDistance(maxDistance)
-    audio.setRolloffFactor(rolloffFactor)
-    audio.setDistanceModel('inverse')
+    const positionalAudio = new THREE.PositionalAudio(listener)
+    positionalAudio.setRefDistance(refDistance)
+    positionalAudio.setMaxDistance(maxDistance)
+    positionalAudio.setRolloffFactor(rolloffFactor)
+    positionalAudio.setDistanceModel('inverse')
 
-    // Connect MediaStream as audio source
+    // Connect MediaStream as audio source via Web Audio API
     const audioContext = listener.context
     const source = audioContext.createMediaStreamSource(stream)
     // @ts-expect-error — Three.js PositionalAudio.setNodeSource accepts AudioNode
-    audio.setNodeSource(source)
+    positionalAudio.setNodeSource(source)
 
-    audioRef.current = audio
+    setAudio(positionalAudio)
 
     return () => {
       // Cleanup: disconnect source and remove audio from scene
       source.disconnect()
-      if (audio.parent) {
-        audio.parent.remove(audio)
+      if (positionalAudio.parent) {
+        positionalAudio.parent.remove(positionalAudio)
       }
-      audioRef.current = null
+      setAudio(null)
     }
-  }, [stream, camera, refDistance, maxDistance, rolloffFactor])
+  }, [stream, scene, refDistance, maxDistance, rolloffFactor])
 
   // Render as a primitive so it attaches to the parent group in the scene graph
-  return audioRef.current ? <primitive object={audioRef.current} /> : null
+  return audio ? <primitive object={audio} /> : null
 }

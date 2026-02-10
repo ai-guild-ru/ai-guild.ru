@@ -30,7 +30,7 @@ interface UseVoiceChatOptions {
   remotePlayerIds: string[]
 }
 
-interface PeerState {
+export interface PeerState {
   pc: RTCPeerConnection
   /** Whether we initiated the connection (offerer) */
   isOfferer: boolean
@@ -467,5 +467,9 @@ export function useVoiceChat({
     isMuted,
     /** Toggle mute/unmute */
     toggleMute,
+    /** Peer connections map ref — for debug overlay */
+    peersRef,
+    /** Local microphone stream ref — for debug overlay */
+    localStreamRef,
   }
 }
