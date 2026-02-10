@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 import { useEffect, useRef, useCallback, useReducer } from 'react'
 import { multiplayerReducer, initialMultiplayerState } from './reducer'
 import type { LocalPlayerState } from './interfaces'
@@ -112,7 +113,6 @@ export function useMultiplayer({ enabled }: UseMultiplayerOptions) {
     wsRef.current = ws
 
     ws.onopen = () => {
-      // eslint-disable-next-line no-console
       console.log('[multiplayer] Connected to world3d server')
     }
 
@@ -130,7 +130,6 @@ export function useMultiplayer({ enabled }: UseMultiplayerOptions) {
             break
 
           case S2C_PLAYER_JOINED:
-            // eslint-disable-next-line no-console
             console.log(
               `[multiplayer] Player joined: ${msg.playerId}`,
               msg.username,
@@ -138,7 +137,6 @@ export function useMultiplayer({ enabled }: UseMultiplayerOptions) {
             break
 
           case S2C_PLAYER_LEFT:
-            // eslint-disable-next-line no-console
             console.log(`[multiplayer] Player left: ${msg.playerId}`)
             dispatch({ type: 'PLAYER_LEFT', playerId: msg.playerId })
             break
@@ -158,7 +156,7 @@ export function useMultiplayer({ enabled }: UseMultiplayerOptions) {
               credential: msg.credential,
               ttl: msg.ttl,
             }
-            // eslint-disable-next-line no-console
+
             console.log('[multiplayer] Received TURN credentials')
             break
 
@@ -177,7 +175,6 @@ export function useMultiplayer({ enabled }: UseMultiplayerOptions) {
     }
 
     ws.onclose = (event) => {
-      // eslint-disable-next-line no-console
       console.log(
         `[multiplayer] Disconnected (code: ${event.code}, reason: ${event.reason})`,
       )

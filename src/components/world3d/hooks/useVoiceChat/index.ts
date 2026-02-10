@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 import { useEffect, useRef, useCallback, useState } from 'react'
 import type { SignalingMessage, TurnCredentials } from '../useMultiplayer'
 
@@ -143,28 +144,56 @@ export function useVoiceChat({
 
       // Handle incoming remote audio track
       pc.ontrack = (event) => {
-        // eslint-disable-next-line no-console
-        console.log(`[voice] Received audio track from ${playerId}`)
+        console.log(
+          `[voice][ontrack] Received track from ${playerId}:`,
+          'kind:',
+          event.track.kind,
+          'readyState:',
+          event.track.readyState,
+          'enabled:',
+          event.track.enabled,
+          'muted:',
+          event.track.muted,
+          'streams:',
+          event.streams.length,
+        )
         if (event.streams[0]) {
+          console.log(
+            `[voice][ontrack] Adding remote stream for ${playerId}, stream id:`,
+            event.streams[0].id,
+            'audioTracks:',
+            event.streams[0].getAudioTracks().length,
+          )
           addRemoteStream(playerId, event.streams[0])
+        } else {
+          console.warn(
+            `[voice][ontrack] No streams in ontrack event for ${playerId}`,
+          )
         }
       }
 
       // Send ICE candidates to remote peer via signaling server
       pc.onicecandidate = (event) => {
         if (event.candidate) {
+          console.log(
+            `[voice][ice] Sending ICE candidate to ${playerId}:`,
+            event.candidate.type,
+            event.candidate.protocol,
+            event.candidate.address,
+          )
           sendSignaling({
             type: C2S_ICE_CANDIDATE,
             targetPlayerId: playerId,
             candidate: JSON.stringify(event.candidate),
           })
+        } else {
+          console.log(`[voice][ice] ICE gathering complete for ${playerId}`)
         }
       }
 
       pc.onconnectionstatechange = () => {
-        // eslint-disable-next-line no-console
         console.log(
-          `[voice] Connection state with ${playerId}: ${pc.connectionState}`,
+          `[voice][state] Connection state with ${playerId}: ${pc.connectionState}, ICE: ${pc.iceConnectionState}, signaling: ${pc.signalingState}`,
         )
         if (
           pc.connectionState === 'failed' ||
@@ -208,6 +237,10 @@ export function useVoiceChat({
       const pc = createPeerConnection(playerId, true)
 
       try {
+        console.log(
+          `[voice][connect] Creating offer for ${playerId}, localStream tracks:`,
+          localStreamRef.current?.getAudioTracks().length ?? 0,
+        )
         const offer = await pc.createOffer()
         await pc.setLocalDescription(offer)
 
@@ -217,8 +250,10 @@ export function useVoiceChat({
           sdp: JSON.stringify(pc.localDescription),
         })
 
-        // eslint-disable-next-line no-console
-        console.log(`[voice] Sent offer to ${playerId}`)
+        console.log(
+          `[voice][connect] Sent offer to ${playerId}, signalingState:`,
+          pc.signalingState,
+        )
       } catch (err) {
         console.error(`[voice] Failed to create offer for ${playerId}:`, err)
         removePeer(playerId)
@@ -237,8 +272,11 @@ export function useVoiceChat({
       switch (msg.type) {
         case 'offer': {
           // Remote peer wants to connect — create answer
-          // eslint-disable-next-line no-console
-          console.log(`[voice] Received offer from ${fromPlayerId}`)
+
+          console.log(
+            `[voice][signal] Received offer from ${fromPlayerId}, existing peer:`,
+            peersRef.current.has(fromPlayerId),
+          )
 
           // If we already have a connection, close it first
           if (peersRef.current.has(fromPlayerId)) {
@@ -260,8 +298,10 @@ export function useVoiceChat({
               sdp: JSON.stringify(pc.localDescription),
             })
 
-            // eslint-disable-next-line no-console
-            console.log(`[voice] Sent answer to ${fromPlayerId}`)
+            console.log(
+              `[voice][signal] Sent answer to ${fromPlayerId}, signalingState:`,
+              pc.signalingState,
+            )
           } catch (err) {
             console.error(
               `[voice] Failed to handle offer from ${fromPlayerId}:`,
@@ -274,8 +314,11 @@ export function useVoiceChat({
 
         case 'answer': {
           // Remote peer accepted our offer
-          // eslint-disable-next-line no-console
-          console.log(`[voice] Received answer from ${fromPlayerId}`)
+
+          console.log(
+            `[voice][signal] Received answer from ${fromPlayerId}, peer exists:`,
+            peersRef.current.has(fromPlayerId),
+          )
 
           const peer = peersRef.current.get(fromPlayerId)
           if (!peer) {
@@ -297,6 +340,9 @@ export function useVoiceChat({
         case 'ice_candidate': {
           const peer = peersRef.current.get(fromPlayerId)
           if (!peer) {
+            console.warn(
+              `[voice][signal] ICE candidate from ${fromPlayerId} but no peer exists`,
+            )
             return
           }
 
@@ -330,7 +376,7 @@ export function useVoiceChat({
         video: false,
       })
       localStreamRef.current = stream
-      // eslint-disable-next-line no-console
+
       console.log('[voice] Microphone captured')
       return stream
     } catch (err) {
@@ -404,8 +450,25 @@ export function useVoiceChat({
 
     let cancelled = false
 
+    console.log(
+      '[voice][init] Main effect started, enabled:',
+      enabled,
+      'remotePlayerIds:',
+      remotePlayerIds,
+    )
+
     const init = async () => {
+      console.log('[voice][init] Calling startMicrophone...')
       const stream = await startMicrophone()
+
+      console.log(
+        '[voice][init] startMicrophone result:',
+        stream
+          ? `stream id=${stream.id}, tracks=${stream.getAudioTracks().length}`
+          : 'null',
+        'cancelled:',
+        cancelled,
+      )
       if (cancelled || !stream) {
         return
       }
@@ -413,6 +476,11 @@ export function useVoiceChat({
       // Connect to all currently visible remote players
       // Use deterministic ordering: only connect if our userId < remotePlayerId
       // to avoid duplicate connections (both sides sending offers)
+
+      console.log(
+        '[voice][init] Connecting to remotePlayerIds:',
+        remotePlayerIds,
+      )
       for (const playerId of remotePlayerIds) {
         if (!peersRef.current.has(playerId)) {
           connectToPeer(playerId)
@@ -424,13 +492,32 @@ export function useVoiceChat({
 
     return () => {
       cancelled = true
+
+      console.log('[voice][init] Main effect cleanup, cancelled=true')
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled])
 
   // React to remote player list changes — connect to new players, disconnect from gone ones
   useEffect(() => {
+    console.log(
+      '[voice][reactive] Remote players changed. enabled:',
+      enabled,
+      'localStream:',
+      !!localStreamRef.current,
+      'remotePlayerIds:',
+      remotePlayerIds,
+      'currentPeers:',
+      [...peersRef.current.keys()],
+    )
+
     if (!enabled || !localStreamRef.current) {
+      console.log(
+        '[voice][reactive] Skipping — enabled:',
+        enabled,
+        'localStream:',
+        !!localStreamRef.current,
+      )
       return
     }
 
@@ -440,6 +527,7 @@ export function useVoiceChat({
     // Connect to new players
     for (const playerId of remotePlayerIds) {
       if (!currentPeerIds.has(playerId)) {
+        console.log('[voice][reactive] Connecting to NEW player:', playerId)
         connectToPeer(playerId)
       }
     }
@@ -447,6 +535,7 @@ export function useVoiceChat({
     // Remove peers that are no longer in the remote players list
     for (const peerId of currentPeerIds) {
       if (!newPlayerIds.has(peerId)) {
+        console.log('[voice][reactive] Removing GONE player:', peerId)
         removePeer(peerId)
       }
     }

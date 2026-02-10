@@ -54,8 +54,6 @@ export const Player: React.FC<PlayerProps> = ({ debug, sendPlayerState }) => {
   const rotationRef = useRef(0)
   // Флаг для однократного разворота на 180° при нажатии S
   const wasBackwardRef = useRef(false)
-  // Счётчик кадров для throttling обновления debug позиции
-  const frameCount = useRef(0)
   // Вертикальный угол камеры (pitch) — управляется мышкой
   const cameraPitchRef = useRef(0.2)
   const [cameraPitch, setCameraPitch] = useState(0.2)
@@ -148,15 +146,6 @@ export const Player: React.FC<PlayerProps> = ({ debug, sendPlayerState }) => {
   useFrame((_, delta) => {
     if (!rigidBodyRef.current) {
       return
-    }
-
-    // --- Отладка delta ---
-    frameCount.current++
-    if (frameCount.current % 60 === 0) {
-      // eslint-disable-next-line no-console
-      console.log(
-        `[Player] frame: ${frameCount.current}, delta: ${delta.toFixed(4)}s, FPS: ${(1 / delta).toFixed(1)}`,
-      )
     }
 
     // --- Чтение ввода ---
@@ -252,31 +241,7 @@ export const Player: React.FC<PlayerProps> = ({ debug, sendPlayerState }) => {
         animation: newAnimation,
       })
     }
-
-    // --- Обновление debug позиции (throttled) ---
-    if (frameCount.current % 10 === 0) {
-      dispatch({
-        type: 'SET_DEBUG_POSITION',
-        payload: { x: position.x, y: position.y, z: position.z },
-      })
-    }
   })
-
-  // useEffect(() => {
-  //   console.log('Player mounted')
-
-  //   return () => {
-  //     console.error('Player unmounted')
-  //   }
-  // }, [])
-
-  // console.log('Player rendering')
-
-  // console.log(
-  //   'Player position',
-  //   `X: ${debugPosition.x.toFixed(2)} Y: ${debugPosition.y.toFixed(2)} Z:{' '}
-  //         ${debugPosition.z.toFixed(2)}`,
-  // )
 
   return (
     <>
