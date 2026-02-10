@@ -1,12 +1,13 @@
 'use client'
 
-import { useRef, useEffect, useMemo, useState } from 'react'
+import { useRef, useEffect, useState } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import { RigidBody, CapsuleCollider } from '@react-three/rapier'
-import { useKeyboardControls, useGLTF, useAnimations } from '@react-three/drei'
-import { Vector3, Group, AnimationClip, AudioListener } from 'three'
+import { useKeyboardControls } from '@react-three/drei'
+import { Vector3, Group, AudioListener } from 'three'
 import type { RapierRigidBody } from '@react-three/rapier'
 import { ThirdPersonCamera } from '../ThirdPersonCamera'
+import { Avatar } from '../Avatar'
 import { usePlayerReducer } from './hooks/usePlayerReducer'
 import { AnimationName } from './interfaces'
 import { DebugCapsuleGeometry } from '../components/debug/DebugCapsuleGeometry'
@@ -18,43 +19,10 @@ const MOUSE_SENSITIVITY = 0.005
 const MIN_PITCH = -Math.PI / 6 // Минимальный pitch (смотрим вверх)
 const MAX_PITCH = Math.PI / 3 // Максимальный pitch (смотрим вниз)
 
-const lft_models_pth = '/assets/gltf'
-const MODEL_PATH = `${lft_models_pth}/avatars/models/avatar.glb`
-const ANIMATION_PATHS = {
-  idle: `${lft_models_pth}/avatars/animations/idle.glb`,
-  walk: `${lft_models_pth}/avatars/animations/walk.glb`,
-  run: `${lft_models_pth}/avatars/animations/run.glb`,
-  jump: `${lft_models_pth}/avatars/animations/jump.glb`,
-}
-
-// Модификатор скорости — умножает базовые скорости анимаций и timeScale
-const SPEED_MULTIPLIER = 1
-// Базовые скорости из анализа анимаций (units/sec), умноженные на модификатор
-const WALK_SPEED = 3.5248 * SPEED_MULTIPLIER
-const RUN_SPEED = 11.6508 * SPEED_MULTIPLIER
+// Базовые скорости из анализа анимаций (units/sec)
+const WALK_SPEED = 3.5248
+const RUN_SPEED = 11.6508
 const JUMP_FORCE = 5
-
-/**
- * Удаляет root motion из анимации — убирает position track для Hips bone.
- * Это нужно, чтобы анимация не двигала модель относительно RigidBody,
- * а движение контролировалось только физикой.
- */
-function removeRootMotion(clip: AnimationClip): AnimationClip {
-  const newTracks = clip.tracks.filter((track) => {
-    if (track.name.includes('Hips') && track.name.endsWith('.position')) {
-      return false
-    }
-    return true
-  })
-  clip.tracks = newTracks
-  return clip
-}
-
-useGLTF.preload(MODEL_PATH)
-useGLTF.preload(ANIMATION_PATHS.idle)
-useGLTF.preload(ANIMATION_PATHS.walk)
-useGLTF.preload(ANIMATION_PATHS.run)
-useGLTF.preload(ANIMATION_PATHS.jump)
 
 type PlayerProps = {
   debug: boolean
@@ -166,71 +134,6 @@ export const Player: React.FC<PlayerProps> = ({ debug }) => {
       head.remove(listener)
     }
   }, [])
-
-  const { scene } = useGLTF(MODEL_PATH)
-  const idleGltf = useGLTF(ANIMATION_PATHS.idle)
-  const walkGltf = useGLTF(ANIMATION_PATHS.walk)
-  const runGltf = useGLTF(ANIMATION_PATHS.run)
-  const jumpGltf = useGLTF(ANIMATION_PATHS.jump)
-
-  const animations = useMemo(
-    () => [
-      ...idleGltf.animations.map((clip) => {
-        clip.name = 'idle'
-        return clip
-      }),
-      ...walkGltf.animations.map((clip) => {
-        clip.name = 'walk'
-        return removeRootMotion(clip)
-      }),
-      ...runGltf.animations.map((clip) => {
-        clip.name = 'run'
-        return removeRootMotion(clip)
-      }),
-      ...jumpGltf.animations.map((clip) => {
-        clip.name = 'jump'
-        return clip
-      }),
-    ],
-    [
-      idleGltf.animations,
-      jumpGltf.animations,
-      runGltf.animations,
-      walkGltf.animations,
-    ],
-  )
-
-  const sceneRef = useRef<Group>(scene as unknown as Group)
-  sceneRef.current = scene as unknown as Group
-
-  const { actions } = useAnimations(animations, sceneRef)
-
-  // Debug: log animation state
-  // useEffect(() => {
-  //   console.log(
-  //     '[Player] Animations loaded:',
-  //     animations.length,
-  //     animations.map((a) => a.name),
-  //   )
-  //   console.log('[Player] Actions available:', Object.keys(actions))
-  //   console.log('[Player] avatarRef.current:', avatarRef.current)
-  //   console.log('[Player] scene:', scene)
-  //   console.log('[Player] mixer:', mixer)
-  // }, [animations, actions, scene, mixer])
-
-  useEffect(() => {
-    if (actions[state.animation]) {
-      Object.values(actions).forEach((action) => action?.fadeOut(0.2))
-      const action = actions[state.animation]
-      action?.reset().fadeIn(0.2).play()
-      // Ускоряем анимацию пропорционально модификатору скорости
-      if (action && (state.animation === 'walk' || state.animation === 'run')) {
-        action.timeScale = SPEED_MULTIPLIER
-      }
-    } else {
-      console.error('[Player] Animation not found:', state.animation)
-    }
-  }, [state.animation, actions])
 
   // Вектор направления движения (переиспользуется каждый кадр)
   const direction = new Vector3()
@@ -400,8 +303,7 @@ export const Player: React.FC<PlayerProps> = ({ debug }) => {
 
           {/* Группа для аватара — вращается при движении */}
           <group ref={avatarRef} position={[0, 0, 0]}>
-            {/* 3D модель персонажа */}
-            <primitive object={scene} scale={0.6} />
+            <Avatar animation={state.animation} />
           </group>
           {/* Камера третьего лица — дочерний объект RigidBody */}
           <ThirdPersonCamera pitch={cameraPitch} yaw={cameraYaw} />
