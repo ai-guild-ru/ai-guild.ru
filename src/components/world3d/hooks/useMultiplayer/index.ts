@@ -16,6 +16,10 @@ const S2C_PLAYER_JOINED = 'player_joined'
 const S2C_PLAYER_LEFT = 'player_left'
 const S2C_WORLD_STATE = 'world_state'
 const S2C_ERROR = 'error'
+const S2C_OFFER = 'offer'
+const S2C_ANSWER = 'answer'
+const S2C_ICE_CANDIDATE = 'ice_candidate'
+const S2C_TURN_CREDENTIALS = 'turn_credentials'
 const C2S_PONG = 'pong'
 const C2S_PLAYER_STATE = 'player_state'
 
@@ -28,6 +32,20 @@ const SEND_INTERVAL_ACTIVE = 500
 
 // Minimum position change to consider "active" movement
 const POSITION_CHANGE_THRESHOLD = 0.01
+
+/** TURN server credentials received from world3d server */
+export interface TurnCredentials {
+  urls: string[]
+  username: string
+  credential: string
+  ttl: number
+}
+
+/** WebRTC signaling message relayed through world3d WS server */
+export type SignalingMessage =
+  | { type: 'offer'; fromPlayerId: string; sdp: string }
+  | { type: 'answer'; fromPlayerId: string; sdp: string }
+  | { type: 'ice_candidate'; fromPlayerId: string; candidate: string }
 
 interface UseMultiplayerOptions {
   /** Whether multiplayer connection is enabled */
@@ -44,6 +62,13 @@ export function useMultiplayer({ enabled }: UseMultiplayerOptions) {
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const enabledRef = useRef(enabled)
   enabledRef.current = enabled
+
+  // Callback ref for signaling messages — set by useVoiceChat
+  const onSignalingMessageRef = useRef<
+    ((msg: SignalingMessage) => void) | null
+  >(null)
+  // TURN credentials received from server
+  const turnCredentialsRef = useRef<TurnCredentials | null>(null)
 
   const [state, dispatch] = useReducer(
     multiplayerReducer,
@@ -124,6 +149,26 @@ export function useMultiplayer({ enabled }: UseMultiplayerOptions) {
 
           case S2C_ERROR:
             console.error(`[multiplayer] Server error: ${msg.message}`)
+            break
+
+          case S2C_TURN_CREDENTIALS:
+            turnCredentialsRef.current = {
+              urls: msg.urls,
+              username: msg.username,
+              credential: msg.credential,
+              ttl: msg.ttl,
+            }
+            // eslint-disable-next-line no-console
+            console.log('[multiplayer] Received TURN credentials')
+            break
+
+          case S2C_OFFER:
+          case S2C_ANSWER:
+          case S2C_ICE_CANDIDATE:
+            // Forward signaling messages to voice chat hook
+            if (onSignalingMessageRef.current) {
+              onSignalingMessageRef.current(msg)
+            }
             break
         }
       } catch {
@@ -215,5 +260,11 @@ export function useMultiplayer({ enabled }: UseMultiplayerOptions) {
     return cleanup
   }, [enabled, connect, cleanup])
 
-  return { wsRef, remotePlayers: state.remotePlayers, sendPlayerState }
+  return {
+    wsRef,
+    remotePlayers: state.remotePlayers,
+    sendPlayerState,
+    onSignalingMessageRef,
+    turnCredentialsRef,
+  }
 }

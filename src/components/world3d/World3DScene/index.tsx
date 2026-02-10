@@ -3,15 +3,17 @@
 import { Canvas } from '@react-three/fiber'
 import { Physics } from '@react-three/rapier'
 import { KeyboardControls, Stats } from '@react-three/drei'
-import { Suspense } from 'react'
+import { Suspense, useMemo } from 'react'
 import { Ground } from '../Ground'
 import { Player } from '../Player'
 import { RemotePlayer } from '../RemotePlayer'
 import { Lighting } from '../Lighting'
 import { Building } from '../Building'
 import { SpatialAudioSource } from '../SpatialAudioSource'
+import { MuteButton } from '../MuteButton'
 import { World3DSceneGlobalStyles, World3DSceneStyled } from './styles'
 import { useMultiplayer } from '../hooks/useMultiplayer'
+import { useVoiceChat } from '../hooks/useVoiceChat'
 import { useAppContext } from 'src/components/AppContext'
 
 const debug = process.env.NEXT_PUBLIC_DEBUG_WORLD3D === 'true'
@@ -30,7 +32,28 @@ export const World3DScene: React.FC = () => {
   const { user } = useAppContext()
 
   // Multiplayer WS connection — enabled only for authenticated users
-  const { remotePlayers, sendPlayerState } = useMultiplayer({ enabled: !!user })
+  const {
+    wsRef,
+    remotePlayers,
+    sendPlayerState,
+    onSignalingMessageRef,
+    turnCredentialsRef,
+  } = useMultiplayer({ enabled: !!user })
+
+  // Remote player IDs list (stable reference for useVoiceChat dependency)
+  const remotePlayerIds = useMemo(
+    () => [...remotePlayers.keys()],
+    [remotePlayers],
+  )
+
+  // Voice chat — WebRTC P2P mesh with spatial audio
+  const { remoteStreams, isMuted, toggleMute } = useVoiceChat({
+    enabled: !!user,
+    wsRef,
+    onSignalingMessageRef,
+    turnCredentialsRef,
+    remotePlayerIds,
+  })
 
   return (
     <>
@@ -53,7 +76,11 @@ export const World3DScene: React.FC = () => {
                 <Player debug={debug} sendPlayerState={sendPlayerState} />
                 {/* Remote players — rendered from server state */}
                 {[...remotePlayers.values()].map((player) => (
-                  <RemotePlayer key={player.playerId} data={player} />
+                  <RemotePlayer
+                    key={player.playerId}
+                    data={player}
+                    voiceStream={remoteStreams.get(player.playerId)}
+                  />
                 ))}
                 {/* Test spatial audio source - positioned near the building */}
                 <SpatialAudioSource
@@ -72,6 +99,8 @@ export const World3DScene: React.FC = () => {
             </Suspense>
           </Canvas>
         </KeyboardControls>
+        {/* Voice chat mute/unmute button — outside Canvas (HTML overlay) */}
+        {user && <MuteButton isMuted={isMuted} onToggle={toggleMute} />}
       </World3DSceneStyled>
     </>
   )
