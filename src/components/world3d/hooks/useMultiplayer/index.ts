@@ -1,9 +1,13 @@
-import { useEffect, useRef, useCallback } from 'react'
+import { useEffect, useRef, useCallback, useReducer } from 'react'
+import { multiplayerReducer, initialMultiplayerState } from './reducer'
+import type { LocalPlayerState } from './interfaces'
+
+export type { RemotePlayerData, LocalPlayerState } from './interfaces'
 
 /**
  * Multiplayer WebSocket hook — connects to world3d WS server.
- * Handles: connection with JWT auth, heartbeat (pong), reconnection.
- * Phase 1: connection only, no state sync yet.
+ * Handles: connection with JWT auth, heartbeat (pong), reconnection,
+ * remote players state (via reducer), and adaptive player state sending.
  */
 
 // Message types matching docker/world3d/src/protocol.ts
@@ -13,9 +17,17 @@ const S2C_PLAYER_LEFT = 'player_left'
 const S2C_WORLD_STATE = 'world_state'
 const S2C_ERROR = 'error'
 const C2S_PONG = 'pong'
+const C2S_PLAYER_STATE = 'player_state'
 
 const WS_URL = process.env.NEXT_PUBLIC_WORLD3D_WS_URL || 'ws://localhost:4100'
 const RECONNECT_DELAY = 3000
+
+// Adaptive send rate thresholds (ms)
+const SEND_INTERVAL_IDLE = 3000
+const SEND_INTERVAL_ACTIVE = 500
+
+// Minimum position change to consider "active" movement
+const POSITION_CHANGE_THRESHOLD = 0.01
 
 interface UseMultiplayerOptions {
   /** Whether multiplayer connection is enabled */
@@ -25,13 +37,22 @@ interface UseMultiplayerOptions {
 /**
  * Hook for multiplayer WebSocket connection to world3d server.
  * Automatically connects when enabled and user has a JWT token.
- * Handles heartbeat (pong responses) and reconnection.
+ * Handles heartbeat, reconnection, remote players state, and adaptive state sending.
  */
 export function useMultiplayer({ enabled }: UseMultiplayerOptions) {
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const enabledRef = useRef(enabled)
   enabledRef.current = enabled
+
+  const [state, dispatch] = useReducer(
+    multiplayerReducer,
+    initialMultiplayerState,
+  )
+
+  // Adaptive send rate state (refs for use in useFrame without re-renders)
+  const lastSentStateRef = useRef<LocalPlayerState | null>(null)
+  const lastSendTimeRef = useRef(0)
 
   const cleanup = useCallback(() => {
     if (reconnectTimerRef.current) {
@@ -42,6 +63,7 @@ export function useMultiplayer({ enabled }: UseMultiplayerOptions) {
       wsRef.current.close()
       wsRef.current = null
     }
+    dispatch({ type: 'RESET' })
   }, [])
 
   const connect = useCallback(() => {
@@ -93,13 +115,11 @@ export function useMultiplayer({ enabled }: UseMultiplayerOptions) {
           case S2C_PLAYER_LEFT:
             // eslint-disable-next-line no-console
             console.log(`[multiplayer] Player left: ${msg.playerId}`)
+            dispatch({ type: 'PLAYER_LEFT', playerId: msg.playerId })
             break
 
           case S2C_WORLD_STATE:
-            // eslint-disable-next-line no-console
-            console.log(
-              `[multiplayer] World state: ${msg.players?.length ?? 0} players`,
-            )
+            dispatch({ type: 'WORLD_STATE', players: msg.players })
             break
 
           case S2C_ERROR:
@@ -129,6 +149,62 @@ export function useMultiplayer({ enabled }: UseMultiplayerOptions) {
     }
   }, [cleanup])
 
+  /**
+   * Send local player state to server with adaptive throttling.
+   * Call this every frame from useFrame — it will internally throttle.
+   * - Active movement: sends every ~500ms
+   * - Idle (no position change): sends every ~3s
+   * - Skips send if state hasn't changed at all
+   */
+  const sendPlayerState = useCallback((playerState: LocalPlayerState) => {
+    const ws = wsRef.current
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      return
+    }
+
+    const now = Date.now()
+    const last = lastSentStateRef.current
+    const elapsed = now - lastSendTimeRef.current
+
+    // Determine if position changed significantly
+    const positionChanged =
+      !last ||
+      Math.abs(playerState.position.x - last.position.x) >
+        POSITION_CHANGE_THRESHOLD ||
+      Math.abs(playerState.position.y - last.position.y) >
+        POSITION_CHANGE_THRESHOLD ||
+      Math.abs(playerState.position.z - last.position.z) >
+        POSITION_CHANGE_THRESHOLD
+
+    // Determine if animation changed
+    const animationChanged = !last || playerState.animation !== last.animation
+
+    // Adaptive interval: active movement → faster, idle → slower
+    const interval = positionChanged ? SEND_INTERVAL_ACTIVE : SEND_INTERVAL_IDLE
+
+    // Skip if not enough time elapsed and nothing important changed
+    if (elapsed < interval && !animationChanged) {
+      return
+    }
+
+    // Skip if absolutely nothing changed and we already sent at least once
+    if (last && !positionChanged && !animationChanged) {
+      return
+    }
+
+    ws.send(
+      JSON.stringify({
+        type: C2S_PLAYER_STATE,
+        position: playerState.position,
+        rotation: playerState.rotation,
+        animation: playerState.animation,
+      }),
+    )
+
+    lastSentStateRef.current = { ...playerState }
+    lastSendTimeRef.current = now
+  }, [])
+
   useEffect(() => {
     if (enabled) {
       connect()
@@ -139,5 +215,5 @@ export function useMultiplayer({ enabled }: UseMultiplayerOptions) {
     return cleanup
   }, [enabled, connect, cleanup])
 
-  return { wsRef }
+  return { wsRef, remotePlayers: state.remotePlayers, sendPlayerState }
 }

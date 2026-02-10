@@ -4,12 +4,13 @@ import { useRef, useEffect, useState } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import { RigidBody, CapsuleCollider } from '@react-three/rapier'
 import { useKeyboardControls } from '@react-three/drei'
-import { Vector3, Group, AudioListener } from 'three'
+import { Vector3, Quaternion, Group, AudioListener } from 'three'
 import type { RapierRigidBody } from '@react-three/rapier'
 import { ThirdPersonCamera } from '../ThirdPersonCamera'
 import { Avatar } from '../Avatar'
 import { usePlayerReducer } from './hooks/usePlayerReducer'
 import { AnimationName } from './interfaces'
+import type { LocalPlayerState } from '../hooks/useMultiplayer'
 import { DebugCapsuleGeometry } from '../components/debug/DebugCapsuleGeometry'
 import { DebugAvatarGeometry } from '../components/debug/DebugAvatarGeometry'
 import { DebugOverlay } from '../components/debug/DebugOverlay'
@@ -26,6 +27,8 @@ const JUMP_FORCE = 5
 
 type PlayerProps = {
   debug: boolean
+  /** Callback to send local player state to multiplayer server (called every frame, internally throttled) */
+  sendPlayerState?: (state: LocalPlayerState) => void
 }
 
 /**
@@ -33,7 +36,7 @@ type PlayerProps = {
  * Использует RigidBody для физического тела и CapsuleCollider для коллизий.
  * Анимации загружаются из отдельных GLB файлов и применяются к модели.
  */
-export const Player: React.FC<PlayerProps> = ({ debug }) => {
+export const Player: React.FC<PlayerProps> = ({ debug, sendPlayerState }) => {
   // === Refs ===
   // rigidBodyRef — ссылка на физическое тело Rapier для управления скоростью и позицией
   const rigidBodyRef = useRef<RapierRigidBody>(null)
@@ -236,6 +239,18 @@ export const Player: React.FC<PlayerProps> = ({ debug }) => {
     // Поворачиваем группу (аватар + камера) в направлении движения
     if (rigidBodyGroupRef.current) {
       rigidBodyGroupRef.current.rotation.y = rotationRef.current
+    }
+
+    // --- Отправка состояния на сервер мультиплеера ---
+    if (sendPlayerState) {
+      // Convert yaw angle to quaternion for server protocol
+      const q = new Quaternion()
+      q.setFromAxisAngle(new Vector3(0, 1, 0), rotationRef.current)
+      sendPlayerState({
+        position: { x: position.x, y: position.y, z: position.z },
+        rotation: { x: q.x, y: q.y, z: q.z, w: q.w },
+        animation: newAnimation,
+      })
     }
 
     // --- Обновление debug позиции (throttled) ---

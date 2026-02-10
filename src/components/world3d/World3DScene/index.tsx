@@ -6,6 +6,7 @@ import { KeyboardControls, Stats } from '@react-three/drei'
 import { Suspense } from 'react'
 import { Ground } from '../Ground'
 import { Player } from '../Player'
+import { RemotePlayer } from '../RemotePlayer'
 import { Lighting } from '../Lighting'
 import { Building } from '../Building'
 import { SpatialAudioSource } from '../SpatialAudioSource'
@@ -29,7 +30,7 @@ export const World3DScene: React.FC = () => {
   const { user } = useAppContext()
 
   // Multiplayer WS connection — enabled only for authenticated users
-  useMultiplayer({ enabled: !!user })
+  const { remotePlayers, sendPlayerState } = useMultiplayer({ enabled: !!user })
 
   return (
     <>
@@ -49,7 +50,11 @@ export const World3DScene: React.FC = () => {
                   rotation={[0, 1.6, 0]}
                   scale={2.2}
                 />
-                <Player debug={debug} />
+                <Player debug={debug} sendPlayerState={sendPlayerState} />
+                {/* Remote players — rendered from server state */}
+                {[...remotePlayers.values()].map((player) => (
+                  <RemotePlayer key={player.playerId} data={player} />
+                ))}
                 {/* Test spatial audio source - positioned near the building */}
                 <SpatialAudioSource
                   url="/assets/sounds/test.mp3"
