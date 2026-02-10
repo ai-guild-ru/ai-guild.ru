@@ -2,8 +2,9 @@
 
 import { useRef, useEffect, useMemo } from 'react'
 import { useGLTF, useAnimations } from '@react-three/drei'
-import { Group, AnimationClip } from 'three'
+import { AnimationClip } from 'three'
 import { AnimationName } from '../Player/interfaces'
+import { useGLTFLoad } from '../hooks/useGLTFLoad'
 
 const lft_models_pth = '/assets/gltf'
 const MODEL_PATH = `${lft_models_pth}/avatars/models/avatar.glb`
@@ -51,7 +52,7 @@ interface AvatarProps {
  * Reusable for both local player and remote players.
  */
 export const Avatar: React.FC<AvatarProps> = ({ animation, scale = 0.6 }) => {
-  const { scene } = useGLTF(MODEL_PATH)
+  const { scene } = useGLTFLoad(MODEL_PATH)
   const idleGltf = useGLTF(ANIMATION_PATHS.idle)
   const walkGltf = useGLTF(ANIMATION_PATHS.walk)
   const runGltf = useGLTF(ANIMATION_PATHS.run)
@@ -60,20 +61,24 @@ export const Avatar: React.FC<AvatarProps> = ({ animation, scale = 0.6 }) => {
   const animations = useMemo(
     () => [
       ...idleGltf.animations.map((clip) => {
-        clip.name = 'idle'
-        return clip
+        const c = clip.clone()
+        c.name = 'idle'
+        return c
       }),
       ...walkGltf.animations.map((clip) => {
-        clip.name = 'walk'
-        return removeRootMotion(clip)
+        const c = clip.clone()
+        c.name = 'walk'
+        return removeRootMotion(c)
       }),
       ...runGltf.animations.map((clip) => {
-        clip.name = 'run'
-        return removeRootMotion(clip)
+        const c = clip.clone()
+        c.name = 'run'
+        return removeRootMotion(c)
       }),
       ...jumpGltf.animations.map((clip) => {
-        clip.name = 'jump'
-        return clip
+        const c = clip.clone()
+        c.name = 'jump'
+        return c
       }),
     ],
     [
@@ -84,8 +89,8 @@ export const Avatar: React.FC<AvatarProps> = ({ animation, scale = 0.6 }) => {
     ],
   )
 
-  const sceneRef = useRef<Group>(scene as unknown as Group)
-  sceneRef.current = scene as unknown as Group
+  const sceneRef = useRef(scene)
+  sceneRef.current = scene
 
   const { actions } = useAnimations(animations, sceneRef)
 
