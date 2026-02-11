@@ -47,10 +47,14 @@ export const World3DScene: React.FC = () => {
     turnCredentialsRef,
   } = useMultiplayer({ enabled: !!user })
 
+  const remotePlayersRef = useRef(remotePlayers)
+
+  remotePlayersRef.current = remotePlayers
+
   // Remote player IDs list (stable reference for useVoiceChat dependency)
   const remotePlayerIds = useMemo(
-    () => [...remotePlayers.keys()],
-    [remotePlayers],
+    () => [...remotePlayersRef.current.keys()],
+    [],
   )
 
   // Voice chat — WebRTC P2P mesh with spatial audio

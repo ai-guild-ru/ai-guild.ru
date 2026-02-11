@@ -30,7 +30,7 @@ type PlayerProps = {
   /** Callback to send local player state to multiplayer server (called every frame, internally throttled) */
   sendPlayerState?: (state: LocalPlayerState) => void
   /** Ref to expose the AudioListener instance for external control (e.g. world mute) */
-  audioListenerRef?: React.MutableRefObject<AudioListener | null>
+  audioListenerRef: React.MutableRefObject<AudioListener | null>
 }
 
 /**
@@ -126,9 +126,7 @@ export const Player: React.FC<PlayerProps> = ({
     head.add(listener)
 
     // Expose listener to parent via ref
-    if (audioListenerRef) {
-      audioListenerRef.current = listener
-    }
+    audioListenerRef.current = listener
 
     // Resume AudioContext on user interaction (browser autoplay policy)
     const resumeContext = () => {
@@ -148,8 +146,7 @@ export const Player: React.FC<PlayerProps> = ({
         audioListenerRef.current = null
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [audioListenerRef])
 
   // Вектор направления движения (переиспользуется каждый кадр)
   const direction = new Vector3()

@@ -131,6 +131,21 @@ export function useVoiceChat({
   }, [])
 
   /**
+   * Close and remove a peer connection.
+   */
+  const removePeer = useCallback(
+    (playerId: string) => {
+      const peer = peersRef.current.get(playerId)
+      if (peer) {
+        peer.pc.close()
+        peersRef.current.delete(playerId)
+        removeRemoteStream(playerId)
+      }
+    },
+    [removeRemoteStream],
+  )
+
+  /**
    * Create an RTCPeerConnection for a remote player.
    * Adds local audio track and sets up event handlers.
    */
@@ -212,23 +227,8 @@ export function useVoiceChat({
       peersRef.current.set(playerId, { pc, isOfferer })
       return pc
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [getIceServers, sendSignaling, addRemoteStream],
-  )
-
-  /**
-   * Close and remove a peer connection.
-   */
-  const removePeer = useCallback(
-    (playerId: string) => {
-      const peer = peersRef.current.get(playerId)
-      if (peer) {
-        peer.pc.close()
-        peersRef.current.delete(playerId)
-        removeRemoteStream(playerId)
-      }
-    },
-    [removeRemoteStream],
+    // [getIceServers, sendSignaling, addRemoteStream],
+    [getIceServers, addRemoteStream, sendSignaling, removePeer],
   )
 
   /**
@@ -514,8 +514,7 @@ export function useVoiceChat({
     return () => {
       console.log('[voice][init] Main effect cleanup')
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled])
+  }, [cleanupAll, enabled, remotePlayerIds])
 
   // React to remote player list changes — connect to new players, disconnect from gone ones
   useEffect(() => {
@@ -565,8 +564,7 @@ export function useVoiceChat({
     return () => {
       cleanupAll()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [cleanupAll])
 
   return {
     /** Remote audio streams keyed by playerId — bind to PositionalAudio */
