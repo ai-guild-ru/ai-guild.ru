@@ -34,6 +34,25 @@ const LoginIcon: React.FC = () => (
 
 const navItems = [
   {
+    label: 'Metaverse',
+    href: '/world3d',
+    icon: (
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M2 10a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-3.5a2 2 0 0 1-1.6-.8L14 15h-4l-.9 1.2a2 2 0 0 1-1.6.8H4a2 2 0 0 1-2-2v-5z" />
+        <path d="M7 8V6a5 5 0 0 1 10 0v2" />
+        <line x1="10" y1="10" x2="10" y2="15" />
+        <line x1="14" y1="10" x2="14" y2="15" />
+      </svg>
+    ),
+  },
+  {
     label: 'Members',
     href: '/users',
     icon: (
