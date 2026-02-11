@@ -6,6 +6,7 @@ export const LayoutStyled = styled.div`
   display: flex;
   min-height: 100vh;
   background: #ffffff;
+  overflow: hidden;
 `
 
 type LayoutMainProps = {
@@ -14,6 +15,7 @@ type LayoutMainProps = {
 
 export const LayoutMain = styled.div<LayoutMainProps>`
   flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   min-height: 100vh;

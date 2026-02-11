@@ -12,6 +12,7 @@ import { Building } from '../Building'
 import { SpatialAudioSource } from '../SpatialAudioSource'
 import { MuteButton } from '../MuteButton'
 import { MuteWorldButton } from '../MuteWorldButton'
+import { ConnectionOverlay } from '../ConnectionOverlay'
 import { DebugVoiceChatOverlay } from '../components/debug/DebugVoiceChatOverlay'
 import {
   World3DSceneGlobalStyles,
@@ -45,6 +46,8 @@ export const World3DScene: React.FC = () => {
     sendPlayerState,
     onSignalingMessageRef,
     turnCredentialsRef,
+    connectionStatus,
+    reconnect,
   } = useMultiplayer({ enabled: !!user })
 
   const remotePlayersRef = useRef(remotePlayers)
@@ -141,6 +144,8 @@ export const World3DScene: React.FC = () => {
             />
           </World3DSceneControlsStyled>
         )}
+        {/* WS connection status overlay — shown on error or session replaced */}
+        <ConnectionOverlay status={connectionStatus} onReconnect={reconnect} />
         {/* WebRTC voice chat debug overlay */}
         {debug && user && (
           <DebugVoiceChatOverlay

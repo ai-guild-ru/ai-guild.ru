@@ -1,9 +1,16 @@
 /* eslint-disable no-console */
-import { useEffect, useRef, useCallback, useReducer } from 'react'
+import { useEffect, useRef, useCallback, useReducer, useState } from 'react'
 import { multiplayerReducer, initialMultiplayerState } from './reducer'
 import type { LocalPlayerState } from './interfaces'
 
 export type { RemotePlayerData, LocalPlayerState } from './interfaces'
+
+export type ConnectionStatus =
+  | 'idle'
+  | 'connecting'
+  | 'connected'
+  | 'error'
+  | 'session_replaced'
 
 /**
  * Multiplayer WebSocket hook — connects to world3d WS server.
@@ -26,6 +33,7 @@ const C2S_PLAYER_STATE = 'player_state'
 
 const WS_URL = process.env.NEXT_PUBLIC_WORLD3D_WS_URL || 'ws://localhost:4100'
 const RECONNECT_DELAY = 3000
+const WS_CLOSE_SESSION_REPLACED = 4009
 
 // Adaptive send rate thresholds (ms)
 const SEND_INTERVAL_IDLE = 3000
@@ -61,6 +69,8 @@ interface UseMultiplayerOptions {
 export function useMultiplayer({ enabled }: UseMultiplayerOptions) {
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [connectionStatus, setConnectionStatus] =
+    useState<ConnectionStatus>('idle')
   const enabledRef = useRef(enabled)
   enabledRef.current = enabled
 
@@ -86,7 +96,7 @@ export function useMultiplayer({ enabled }: UseMultiplayerOptions) {
       reconnectTimerRef.current = null
     }
     if (wsRef.current) {
-      wsRef.current.close()
+      wsRef.current.close(1000, 'unmount')
       wsRef.current = null
     }
     dispatch({ type: 'RESET' })
@@ -109,11 +119,14 @@ export function useMultiplayer({ enabled }: UseMultiplayerOptions) {
 
     cleanup()
 
+    setConnectionStatus('connecting')
+
     const ws = new WebSocket(`${WS_URL}?token=${token}`)
     wsRef.current = ws
 
     ws.onopen = () => {
       console.log('[multiplayer] Connected to world3d server')
+      setConnectionStatus('connected')
     }
 
     ws.onmessage = (event) => {
@@ -180,8 +193,13 @@ export function useMultiplayer({ enabled }: UseMultiplayerOptions) {
       )
       wsRef.current = null
 
-      // Reconnect unless intentionally closed or disabled
-      if (enabledRef.current && event.code !== 1000) {
+      if (event.code === WS_CLOSE_SESSION_REPLACED) {
+        // Session replaced — do not reconnect, wait for user action
+        console.warn('[multiplayer] Session replaced by another tab/window')
+        setConnectionStatus('session_replaced')
+      } else if (enabledRef.current && event.code !== 1000) {
+        // Connection lost unexpectedly — set error and schedule reconnect
+        setConnectionStatus('error')
         reconnectTimerRef.current = setTimeout(connect, RECONNECT_DELAY)
       }
     }
@@ -263,5 +281,7 @@ export function useMultiplayer({ enabled }: UseMultiplayerOptions) {
     sendPlayerState,
     onSignalingMessageRef,
     turnCredentialsRef,
+    connectionStatus,
+    reconnect: connect,
   }
 }
