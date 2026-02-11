@@ -90,7 +90,7 @@ model TelegramAccount {
   createdAt DateTime @default(now()) @db.Date()
   updatedAt DateTime @default(now()) @updatedAt @db.Date()
 
-  externalKey Int       @unique
+  externalKey String       @unique
   first_name  String?
   last_name   String?
   username    String?

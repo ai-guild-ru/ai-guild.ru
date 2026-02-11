@@ -52,7 +52,7 @@ builder.mutationField('authViaTelegram', (t) =>
       const { tgAuthData } = args
       const { prisma, currentUser } = ctx
 
-      const externalKey = tgAuthData.id
+      const externalKey = tgAuthData.id.toString()
 
       const isValid = checkTelegramAuth(tgAuthData)
 
@@ -82,11 +82,11 @@ builder.mutationField('authViaTelegram', (t) =>
         tgAccount = tgAccountResponse
         token = await createToken(user, ctx)
       } else {
-        const { id, auth_date, first_name, last_name, photo_url, username } =
+        const { auth_date, first_name, last_name, photo_url, username } =
           tgAuthData
 
         const tgCreateData: Prisma.TelegramAccountCreateWithoutUserInput = {
-          externalKey: id,
+          externalKey,
           auth_date: auth_date ? new Date(auth_date * 1000) : undefined,
           first_name,
           last_name,
