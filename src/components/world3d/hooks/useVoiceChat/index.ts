@@ -60,10 +60,13 @@ export function useVoiceChat({
   const [remoteStreams, setRemoteStreams] = useState<Map<string, MediaStream>>(
     new Map(),
   )
-  // Mute state
-  const [isMuted, setIsMuted] = useState(false)
+  // Mute state — microphone is off by default
+  const [isMuted, setIsMuted] = useState(true)
   const enabledRef = useRef(enabled)
   enabledRef.current = enabled
+  // Ref for remotePlayerIds — accessible in toggleMute without re-creating callback
+  const remotePlayerIdsRef = useRef(remotePlayerIds)
+  remotePlayerIdsRef.current = remotePlayerIds
 
   /**
    * Build ICE server config from TURN credentials.
@@ -416,21 +419,54 @@ export function useVoiceChat({
   }, [])
 
   /**
-   * Toggle mute/unmute local microphone.
+   * Add local audio tracks to all existing peer connections.
+   * Called when microphone is acquired after peers are already connected.
    */
-  const toggleMute = useCallback(() => {
-    const stream = localStreamRef.current
-    if (!stream) {
+  const addTracksToPeers = useCallback((stream: MediaStream) => {
+    for (const [playerId, peer] of peersRef.current) {
+      const senders = peer.pc.getSenders()
+      const hasAudio = senders.some((s) => s.track?.kind === 'audio')
+      if (!hasAudio) {
+        for (const track of stream.getAudioTracks()) {
+          peer.pc.addTrack(track, stream)
+        }
+        console.log(`[voice] Added audio track to existing peer ${playerId}`)
+      }
+    }
+  }, [])
+
+  /**
+   * Toggle mute/unmute local microphone.
+   * On first unmute — requests microphone access and adds tracks to peers.
+   * On subsequent toggles — flips track.enabled.
+   */
+  const toggleMute = useCallback(async () => {
+    // First unmute: acquire microphone
+    if (!localStreamRef.current) {
+      const stream = await startMicrophone()
+      if (!stream) {
+        return
+      }
+      // Add tracks to already-established peer connections
+      addTracksToPeers(stream)
+      // Connect to remote players that we haven't connected to yet
+      for (const playerId of remotePlayerIdsRef.current) {
+        if (!peersRef.current.has(playerId)) {
+          connectToPeer(playerId)
+        }
+      }
+      setIsMuted(false)
       return
     }
 
-    const audioTracks = stream.getAudioTracks()
+    // Subsequent toggles: flip track.enabled
+    const audioTracks = localStreamRef.current.getAudioTracks()
     const newMuted = !audioTracks[0]?.enabled
     for (const track of audioTracks) {
       track.enabled = newMuted
     }
     setIsMuted(!newMuted)
-  }, [])
+  }, [startMicrophone, addTracksToPeers, connectToPeer])
 
   /**
    * Close all peer connections and stop microphone.
@@ -465,52 +501,18 @@ export function useVoiceChat({
       return
     }
 
-    let cancelled = false
-
+    // Microphone is NOT started here — it will be acquired lazily
+    // when the user clicks unmute (toggleMute).
+    // We only set up signaling subscription above.
     console.log(
-      '[voice][init] Main effect started, enabled:',
+      '[voice][init] Main effect started (mic off by default), enabled:',
       enabled,
       'remotePlayerIds:',
       remotePlayerIds,
     )
 
-    const init = async () => {
-      console.log('[voice][init] Calling startMicrophone...')
-      const stream = await startMicrophone()
-
-      console.log(
-        '[voice][init] startMicrophone result:',
-        stream
-          ? `stream id=${stream.id}, tracks=${stream.getAudioTracks().length}`
-          : 'null',
-        'cancelled:',
-        cancelled,
-      )
-      if (cancelled || !stream) {
-        return
-      }
-
-      // Connect to all currently visible remote players
-      // Use deterministic ordering: only connect if our userId < remotePlayerId
-      // to avoid duplicate connections (both sides sending offers)
-
-      console.log(
-        '[voice][init] Connecting to remotePlayerIds:',
-        remotePlayerIds,
-      )
-      for (const playerId of remotePlayerIds) {
-        if (!peersRef.current.has(playerId)) {
-          connectToPeer(playerId)
-        }
-      }
-    }
-
-    init()
-
     return () => {
-      cancelled = true
-
-      console.log('[voice][init] Main effect cleanup, cancelled=true')
+      console.log('[voice][init] Main effect cleanup')
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled])

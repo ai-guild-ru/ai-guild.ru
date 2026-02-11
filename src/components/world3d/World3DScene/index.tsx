@@ -3,7 +3,7 @@
 import { Canvas } from '@react-three/fiber'
 import { Physics } from '@react-three/rapier'
 import { KeyboardControls, Stats } from '@react-three/drei'
-import { Suspense, useMemo } from 'react'
+import { Suspense, useCallback, useMemo, useRef, useState } from 'react'
 import { Ground } from '../Ground'
 import { Player } from '../Player'
 import { RemotePlayer } from '../RemotePlayer'
@@ -11,11 +11,17 @@ import { Lighting } from '../Lighting'
 import { Building } from '../Building'
 import { SpatialAudioSource } from '../SpatialAudioSource'
 import { MuteButton } from '../MuteButton'
+import { MuteWorldButton } from '../MuteWorldButton'
 import { DebugVoiceChatOverlay } from '../components/debug/DebugVoiceChatOverlay'
-import { World3DSceneGlobalStyles, World3DSceneStyled } from './styles'
+import {
+  World3DSceneGlobalStyles,
+  World3DSceneStyled,
+  World3DSceneControlsStyled,
+} from './styles'
 import { useMultiplayer } from '../hooks/useMultiplayer'
 import { useVoiceChat } from '../hooks/useVoiceChat'
 import { useAppContext } from 'src/components/AppContext'
+import type { AudioListener } from 'three'
 
 const debug = process.env.NEXT_PUBLIC_DEBUG_WORLD3D === 'true'
 const debugPhysics = process.env.NEXT_PUBLIC_DEBUG_WORLD3D_PHYSICS === 'true'
@@ -58,6 +64,21 @@ export const World3DScene: React.FC = () => {
       remotePlayerIds,
     })
 
+  // AudioListener ref — exposed by Player for world mute control
+  const audioListenerRef = useRef<AudioListener | null>(null)
+  // World mute state — controls AudioListener gain (mutes all 3D sounds)
+  const [isWorldMuted, setIsWorldMuted] = useState(false)
+
+  const toggleWorldMute = useCallback(() => {
+    const listener = audioListenerRef.current
+    if (!listener) {
+      return
+    }
+    const newMuted = !isWorldMuted
+    listener.setMasterVolume(newMuted ? 0 : 1)
+    setIsWorldMuted(newMuted)
+  }, [isWorldMuted])
+
   return (
     <>
       <World3DSceneGlobalStyles />
@@ -65,7 +86,7 @@ export const World3DScene: React.FC = () => {
         <KeyboardControls map={keyboardMap}>
           <Canvas shadows camera={{ position: [0, 5, 10], fov: 60 }}>
             <Suspense fallback={null}>
-              {debug && <Stats />}
+              {debug && <Stats className="drai--debug-stats" />}
               <Physics gravity={[0, -9.81, 0]} debug={debug && debugPhysics}>
                 {debug && <axesHelper args={[10]} />}
                 <Lighting />
@@ -76,7 +97,11 @@ export const World3DScene: React.FC = () => {
                   rotation={[0, 1.6, 0]}
                   scale={2.2}
                 />
-                <Player debug={debug} sendPlayerState={sendPlayerState} />
+                <Player
+                  debug={debug}
+                  sendPlayerState={sendPlayerState}
+                  audioListenerRef={audioListenerRef}
+                />
                 {/* Remote players — rendered from server state */}
                 {[...remotePlayers.values()].map((player) => (
                   <RemotePlayer
@@ -102,8 +127,16 @@ export const World3DScene: React.FC = () => {
             </Suspense>
           </Canvas>
         </KeyboardControls>
-        {/* Voice chat mute/unmute button — outside Canvas (HTML overlay) */}
-        {user && <MuteButton isMuted={isMuted} onToggle={toggleMute} />}
+        {/* Audio control buttons — mic mute + world mute */}
+        {user && (
+          <World3DSceneControlsStyled>
+            <MuteButton isMuted={isMuted} onToggle={toggleMute} />
+            <MuteWorldButton
+              isMuted={isWorldMuted}
+              onToggle={toggleWorldMute}
+            />
+          </World3DSceneControlsStyled>
+        )}
         {/* WebRTC voice chat debug overlay */}
         {debug && user && (
           <DebugVoiceChatOverlay

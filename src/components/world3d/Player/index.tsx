@@ -29,6 +29,8 @@ type PlayerProps = {
   debug: boolean
   /** Callback to send local player state to multiplayer server (called every frame, internally throttled) */
   sendPlayerState?: (state: LocalPlayerState) => void
+  /** Ref to expose the AudioListener instance for external control (e.g. world mute) */
+  audioListenerRef?: React.MutableRefObject<AudioListener | null>
 }
 
 /**
@@ -36,7 +38,11 @@ type PlayerProps = {
  * Использует RigidBody для физического тела и CapsuleCollider для коллизий.
  * Анимации загружаются из отдельных GLB файлов и применяются к модели.
  */
-export const Player: React.FC<PlayerProps> = ({ debug, sendPlayerState }) => {
+export const Player: React.FC<PlayerProps> = ({
+  debug,
+  sendPlayerState,
+  audioListenerRef,
+}) => {
   // === Refs ===
   // rigidBodyRef — ссылка на физическое тело Rapier для управления скоростью и позицией
   const rigidBodyRef = useRef<RapierRigidBody>(null)
@@ -119,6 +125,11 @@ export const Player: React.FC<PlayerProps> = ({ debug, sendPlayerState }) => {
     const listener = new AudioListener()
     head.add(listener)
 
+    // Expose listener to parent via ref
+    if (audioListenerRef) {
+      audioListenerRef.current = listener
+    }
+
     // Resume AudioContext on user interaction (browser autoplay policy)
     const resumeContext = () => {
       if (listener.context.state === 'suspended') {
@@ -133,7 +144,11 @@ export const Player: React.FC<PlayerProps> = ({ debug, sendPlayerState }) => {
       document.removeEventListener('click', resumeContext)
       document.removeEventListener('keydown', resumeContext)
       head.remove(listener)
+      if (audioListenerRef) {
+        audioListenerRef.current = null
+      }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Вектор направления движения (переиспользуется каждый кадр)

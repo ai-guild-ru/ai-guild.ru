@@ -1,6 +1,6 @@
 import styled from 'styled-components'
 
-export const MuteButtonStyled = styled.button<{ $isMuted: boolean }>`
+export const MuteWorldButtonStyled = styled.button<{ $isMuted: boolean }>`
   display: flex;
   align-items: center;
   justify-content: center;
